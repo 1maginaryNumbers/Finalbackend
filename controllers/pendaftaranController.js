@@ -1,6 +1,7 @@
 const Pendaftaran = require("../models/pendaftaran");
 const Kegiatan = require("../models/kegiatan");
 const crypto = require("crypto");
+const QRCode = require("qrcode");
 
 exports.createPendaftaran = async (req, res) => {
   try {
@@ -15,7 +16,8 @@ exports.createPendaftaran = async (req, res) => {
       return res.status(404).json({ message: "Kegiatan not found" });
     }
     
-    const qrCode = crypto.randomBytes(16).toString('hex');
+    const qrCodeData = crypto.randomBytes(16).toString('hex');
+    const qrCodeImage = await QRCode.toDataURL(qrCodeData);
     
     const pendaftaran = new Pendaftaran({
       kegiatan,
@@ -24,7 +26,8 @@ exports.createPendaftaran = async (req, res) => {
       email,
       nomorTelepon,
       tipePerson: tipePerson || 'external',
-      qrCode
+      qrCode: qrCodeImage,
+      qrCodeData: qrCodeData
     });
     
     await pendaftaran.save();
@@ -210,6 +213,13 @@ exports.updatePendaftaran = async (req, res) => {
     if (email) pendaftaran.email = email;
     if (nomorTelepon) pendaftaran.nomorTelepon = nomorTelepon;
     if (tipePerson) pendaftaran.tipePerson = tipePerson;
+    
+    if (!pendaftaran.qrCode) {
+      const qrCodeData = crypto.randomBytes(16).toString('hex');
+      const qrCodeImage = await QRCode.toDataURL(qrCodeData);
+      pendaftaran.qrCode = qrCodeImage;
+      pendaftaran.qrCodeData = qrCodeData;
+    }
     
     await pendaftaran.save();
     

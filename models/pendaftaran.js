@@ -8,7 +8,8 @@ const pendaftaranSchema = new mongoose.Schema({
   nomorTelepon: { type: String, required: true },
   tanggalDaftar: { type: Date, default: Date.now },
   tipePerson: { type: String, enum: ['internal', 'external'], default: 'external' },
-  qrCode: { type: String }
+  qrCode: { type: String },
+  qrCodeData: { type: String }
 });
 
 module.exports = mongoose.model("Pendaftaran", pendaftaranSchema);

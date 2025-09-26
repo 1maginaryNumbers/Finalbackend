@@ -4,38 +4,66 @@ const Umat = require("../models/umat");
 
 exports.scanQRCode = async (req, res) => {
   try {
-    const { qrCode, kegiatanId } = req.body;
+    const { qrCodeData, kegiatanId } = req.body;
     
-    if (!qrCode || !kegiatanId) {
-      return res.status(400).json({ message: "QR Code and kegiatan ID are required" });
+    if (!qrCodeData || !kegiatanId) {
+      return res.status(400).json({ message: "QR Code data and kegiatan ID are required" });
     }
     
-    const pendaftaran = await Pendaftaran.findOne({ qrCode, kegiatan: kegiatanId });
+    const pendaftaran = await Pendaftaran.findOne({ 
+      qrCodeData: qrCodeData,
+      kegiatan: kegiatanId 
+    }).populate('kegiatan');
+    
     if (!pendaftaran) {
       return res.status(404).json({ message: "Invalid QR Code or kegiatan not found" });
     }
     
-    const existingAbsensi = await Absensi.findOne({ 
-      umat: pendaftaran._id, 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    let existingAbsensi = await Absensi.findOne({ 
+      pendaftaran: pendaftaran._id, 
       kegiatan: kegiatanId,
-      tanggal: { $gte: new Date().setHours(0, 0, 0, 0) }
+      tanggal: { $gte: today, $lt: tomorrow }
     });
     
     if (existingAbsensi) {
-      return res.status(409).json({ message: "Attendance already recorded for today" });
+      if (existingAbsensi.status === 'hadir') {
+        return res.status(409).json({ 
+          message: "Attendance already recorded for today",
+          absensi: existingAbsensi,
+          pendaftaran: pendaftaran
+        });
+      } else {
+        existingAbsensi.status = 'hadir';
+        existingAbsensi.tanggal = new Date();
+        await existingAbsensi.save();
+        
+        return res.json({
+          message: "Attendance status updated successfully",
+          absensi: existingAbsensi,
+          pendaftaran: pendaftaran
+        });
+      }
     }
     
     const absensi = new Absensi({
-      umat: pendaftaran._id,
+      pendaftaran: pendaftaran._id,
       kegiatan: kegiatanId,
-      qrCode
+      status: 'hadir',
+      tipePerson: pendaftaran.tipePerson,
+      qrCode: qrCodeData
     });
     
     await absensi.save();
     
     res.json({
       message: "Attendance recorded successfully",
-      absensi
+      absensi: absensi,
+      pendaftaran: pendaftaran
     });
   } catch (err) {
     res.status(500).json({
