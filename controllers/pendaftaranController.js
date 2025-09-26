@@ -4,7 +4,7 @@ const crypto = require("crypto");
 
 exports.createPendaftaran = async (req, res) => {
   try {
-    const { kegiatan, namaLengkap, email, nomorTelepon } = req.body;
+    const { kegiatan, namaLengkap, email, nomorTelepon, tipePerson } = req.body;
     
     if (!kegiatan || !namaLengkap || !email || !nomorTelepon) {
       return res.status(400).json({ message: "All fields are required" });
@@ -23,6 +23,7 @@ exports.createPendaftaran = async (req, res) => {
       namaLengkap,
       email,
       nomorTelepon,
+      tipePerson: tipePerson || 'external',
       qrCode
     });
     
@@ -89,6 +90,7 @@ exports.daftarKegiatan = async (req, res) => {
             namaLengkap: p.namaLengkap,
             email: p.email,
             nomorTelepon: p.nomorTelepon,
+            tipePerson: p.tipePerson || 'external',
             qrCode
           });
           
@@ -127,6 +129,7 @@ exports.daftarKegiatan = async (req, res) => {
         namaLengkap: peserta.namaLengkap,
         email: peserta.email,
         nomorTelepon: peserta.nomorTelepon,
+        tipePerson: peserta.tipePerson || 'external',
         qrCode
       });
       
@@ -181,7 +184,7 @@ exports.getAllPendaftaran = async (req, res) => {
 
 exports.updatePendaftaran = async (req, res) => {
   try {
-    const { namaLengkap, email, nomorTelepon } = req.body;
+    const { namaLengkap, email, nomorTelepon, tipePerson } = req.body;
     
     const pendaftaran = await Pendaftaran.findById(req.params.id);
     
@@ -206,6 +209,7 @@ exports.updatePendaftaran = async (req, res) => {
     if (namaLengkap) pendaftaran.namaLengkap = namaLengkap;
     if (email) pendaftaran.email = email;
     if (nomorTelepon) pendaftaran.nomorTelepon = nomorTelepon;
+    if (tipePerson) pendaftaran.tipePerson = tipePerson;
     
     await pendaftaran.save();
     
@@ -272,6 +276,35 @@ exports.bulkDeletePendaftaran = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Error bulk deleting pendaftaran",
+      error: err.message
+    });
+  }
+};
+
+exports.getPendaftaranByKegiatanName = async (req, res) => {
+  try {
+    const { kegiatanName } = req.params;
+    
+    let query = {};
+    if (kegiatanName && kegiatanName !== 'all') {
+      query = { namaKegiatan: { $regex: kegiatanName, $options: 'i' } };
+    }
+    
+    const [pendaftaran, allPendaftaran] = await Promise.all([
+      Pendaftaran.find(query).sort({ tanggalDaftar: -1 }),
+      Pendaftaran.find({}, 'namaKegiatan')
+    ]);
+    
+    const uniqueKegiatan = [...new Set(allPendaftaran.map(item => item.namaKegiatan))];
+    
+    res.json({
+      pendaftaran,
+      uniqueKegiatan,
+      total: pendaftaran.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching pendaftaran by kegiatan",
       error: err.message
     });
   }

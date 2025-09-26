@@ -47,16 +47,40 @@ exports.scanQRCode = async (req, res) => {
 
 exports.createAbsensi = async (req, res) => {
   try {
-    const { umat, kegiatan, status } = req.body;
+    const { pendaftaran, kegiatan, status, tipePerson } = req.body;
     
-    if (!umat || !kegiatan) {
-      return res.status(400).json({ message: "Umat and kegiatan are required" });
+    if (!pendaftaran || !kegiatan) {
+      return res.status(400).json({ message: "Pendaftaran and kegiatan are required" });
+    }
+    
+    const pendaftaranData = await Pendaftaran.findById(pendaftaran);
+    if (!pendaftaranData) {
+      return res.status(404).json({ message: "Pendaftaran not found" });
+    }
+    
+    if (pendaftaranData.kegiatan.toString() !== kegiatan) {
+      return res.status(400).json({ 
+        message: "Selected pendaftaran is not registered for the selected kegiatan" 
+      });
+    }
+    
+    const existingAbsensi = await Absensi.findOne({
+      pendaftaran,
+      kegiatan,
+      tanggal: { $gte: new Date().setHours(0, 0, 0, 0) }
+    });
+    
+    if (existingAbsensi) {
+      return res.status(409).json({ 
+        message: "Attendance already recorded for this person and kegiatan today" 
+      });
     }
     
     const absensi = new Absensi({
-      umat,
+      pendaftaran,
       kegiatan,
-      status: status || 'hadir'
+      status: status || 'hadir',
+      tipePerson: tipePerson || pendaftaranData.tipePerson || 'external'
     });
     
     await absensi.save();
@@ -76,7 +100,7 @@ exports.createAbsensi = async (req, res) => {
 exports.getAllAbsensi = async (req, res) => {
   try {
     const absensi = await Absensi.find()
-      .populate('umat', 'namaLengkap email')
+      .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
       .populate('kegiatan', 'namaKegiatan')
       .sort({ tanggal: -1 });
     
@@ -94,7 +118,7 @@ exports.getAbsensiByKegiatan = async (req, res) => {
     const { kegiatanId } = req.params;
     
     const absensi = await Absensi.find({ kegiatan: kegiatanId })
-      .populate('umat', 'namaLengkap email')
+      .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
       .populate('kegiatan', 'namaKegiatan')
       .sort({ tanggal: -1 });
     
@@ -109,7 +133,7 @@ exports.getAbsensiByKegiatan = async (req, res) => {
 
 exports.updateAbsensi = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, tipePerson } = req.body;
     
     const absensi = await Absensi.findById(req.params.id);
     
@@ -118,6 +142,7 @@ exports.updateAbsensi = async (req, res) => {
     }
     
     if (status) absensi.status = status;
+    if (tipePerson) absensi.tipePerson = tipePerson;
     
     await absensi.save();
     

@@ -5,6 +5,7 @@ const authMiddleware = require("../middlewares/auth");
 
 router.post("/", pendaftaranController.createPendaftaran);
 router.get("/", pendaftaranController.getAllPendaftaran);
+router.get("/filter/:kegiatanName", pendaftaranController.getPendaftaranByKegiatanName);
 router.get("/:id", pendaftaranController.getPendaftaranById);
 router.put("/:id", authMiddleware, pendaftaranController.updatePendaftaran);
 router.delete("/bulk", authMiddleware, pendaftaranController.bulkDeletePendaftaran);

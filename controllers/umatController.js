@@ -117,3 +117,27 @@ exports.deleteUmat = async (req, res) => {
     });
   }
 };
+
+exports.checkUmatByName = async (req, res) => {
+  try {
+    const { nama } = req.params;
+    
+    if (!nama) {
+      return res.status(400).json({ message: "Nama is required" });
+    }
+    
+    const umat = await Umat.findOne({ 
+      nama: { $regex: new RegExp(`^${nama}$`, 'i') } 
+    });
+    
+    res.json({
+      exists: !!umat,
+      umat: umat || null
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error checking umat",
+      error: err.message
+    });
+  }
+};

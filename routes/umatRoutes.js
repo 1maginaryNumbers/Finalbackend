@@ -7,6 +7,7 @@ router.post("/", umatController.createUmat);
 router.get("/", umatController.getAllUmat);
 router.post("/broadcast", broadcastController.sendBroadcast);
 router.get("/broadcast/recipients", broadcastController.getUmatForBroadcast);
+router.get("/check/:nama", umatController.checkUmatByName);
 router.get("/:id", umatController.getUmatById);
 router.put("/:id", umatController.updateUmat);
 router.delete("/:id", umatController.deleteUmat);

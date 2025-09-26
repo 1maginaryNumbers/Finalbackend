@@ -7,6 +7,7 @@ const pendaftaranSchema = new mongoose.Schema({
   email: { type: String, required: true },
   nomorTelepon: { type: String, required: true },
   tanggalDaftar: { type: Date, default: Date.now },
+  tipePerson: { type: String, enum: ['internal', 'external'], default: 'external' },
   qrCode: { type: String }
 });
 
