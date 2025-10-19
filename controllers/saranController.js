@@ -3,16 +3,18 @@ const { logActivity } = require("../utils/activityLogger");
 
 exports.createSaran = async (req, res) => {
   try {
-    const { nama, email, pesan } = req.body;
+    const { namaLengkap, email, nomorTelepon, kategori, kritikSaran } = req.body;
     
-    if (!nama || !email || !pesan) {
-      return res.status(400).json({ message: "Nama, email, and pesan are required" });
+    if (!namaLengkap || !kritikSaran) {
+      return res.status(400).json({ message: "Nama lengkap and kritik saran are required" });
     }
     
     const saran = new Saran({
-      nama,
+      namaLengkap,
       email,
-      pesan
+      nomorTelepon,
+      kategori,
+      kritikSaran
     });
     
     await saran.save();
@@ -21,11 +23,12 @@ exports.createSaran = async (req, res) => {
       actionType: 'CREATE',
       entityType: 'SARAN',
       entityId: saran._id,
-      entityName: saran.nama,
-      description: `Created new saran from: ${saran.nama}`,
+      entityName: saran.namaLengkap,
+      description: `Created new saran from: ${saran.namaLengkap}`,
       details: { 
-        nama: saran.nama, 
-        email: saran.email
+        namaLengkap: saran.namaLengkap, 
+        email: saran.email,
+        kategori: saran.kategori
       }
     });
     

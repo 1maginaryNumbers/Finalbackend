@@ -182,29 +182,85 @@ exports.exportActivityLogs = async (req, res) => {
       .sort({ timestamp: -1 });
     
     if (format === 'csv') {
-      const csvHeader = 'Timestamp,User,Action Type,Entity Type,Entity Name,Description,Status,IP Address\n';
+      const csvHeader = 'Date,Time,User,Action,Entity Type,Entity Name,Description,Status,IP Address\n';
       const csvData = logs.map(log => {
-        const timestamp = new Date(log.timestamp).toISOString();
-        const user = (log.user || '').replace(/,/g, ';');
-        const actionType = (log.actionType || '').replace(/,/g, ';');
-        const entityType = (log.entityType || '').replace(/,/g, ';');
-        const entityName = (log.entityName || '').replace(/,/g, ';');
-        const description = (log.description || '').replace(/,/g, ';');
-        const status = (log.status || '').replace(/,/g, ';');
-        const ipAddress = (log.ipAddress || '').replace(/,/g, ';');
+        const date = new Date(log.timestamp);
+        const formattedDate = date.toLocaleDateString('id-ID', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const formattedTime = date.toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
         
-        return `${timestamp},${user},${actionType},${entityType},${entityName},${description},${status},${ipAddress}`;
+        const user = (log.user || 'System').replace(/,/g, ';').replace(/"/g, '');
+        const actionType = (log.actionType || '').replace(/,/g, ';').replace(/"/g, '');
+        const entityType = (log.entityType || '').replace(/,/g, ';').replace(/"/g, '');
+        const entityName = (log.entityName || '').replace(/,/g, ';').replace(/"/g, '');
+        const description = (log.description || '').replace(/,/g, ';').replace(/"/g, '');
+        const status = (log.status || 'SUCCESS').replace(/,/g, ';').replace(/"/g, '');
+        const ipAddress = (log.ipAddress || '').replace(/,/g, ';').replace(/"/g, '');
+        
+        return `${formattedDate},${formattedTime},${user},${actionType},${entityType},${entityName},${description},${status},${ipAddress}`;
       }).join('\n');
       
       const csvContent = csvHeader + csvData;
       
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="activity_logs_${new Date().toISOString().split('T')[0]}.csv"`);
-      res.send(csvContent);
+      res.send('\ufeff' + csvContent);
     } else if (format === 'json') {
-      res.setHeader('Content-Type', 'application/json');
+      const formattedLogs = logs.map(log => ({
+        id: log._id,
+        timestamp: {
+          date: new Date(log.timestamp).toLocaleDateString('id-ID', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          time: new Date(log.timestamp).toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+          }),
+          iso: log.timestamp
+        },
+        user: log.user || 'System',
+        action: {
+          type: log.actionType,
+          description: log.description
+        },
+        entity: {
+          type: log.entityType,
+          name: log.entityName,
+          id: log.entityId
+        },
+        status: log.status || 'SUCCESS',
+        technical: {
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          details: log.details
+        }
+      }));
+      
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="activity_logs_${new Date().toISOString().split('T')[0]}.json"`);
-      res.json(logs);
+      res.json({
+        exportInfo: {
+          generatedAt: new Date().toISOString(),
+          totalRecords: logs.length,
+          filters: {
+            startDate,
+            endDate,
+            actionType,
+            entityType
+          }
+        },
+        logs: formattedLogs
+      });
     } else {
       res.status(400).json({ message: 'Invalid format. Supported formats: csv, json' });
     }
