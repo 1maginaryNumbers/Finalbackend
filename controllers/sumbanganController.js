@@ -1,4 +1,5 @@
 const Sumbangan = require("../models/sumbangan");
+const { logActivity } = require("../utils/activityLogger");
 const Transaksi = require("../models/transaksi");
 
 exports.createSumbangan = async (req, res) => {
@@ -18,6 +19,19 @@ exports.createSumbangan = async (req, res) => {
     
     await sumbangan.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'SUMBANGAN',
+      entityId: sumbangan._id,
+      entityName: sumbangan.namaDonatur,
+      description: `Created new sumbangan from: ${sumbangan.namaDonatur}`,
+      details: { 
+        namaDonatur: sumbangan.namaDonatur, 
+        jumlah: sumbangan.jumlah,
+        metode: sumbangan.metode
+      }
+    });
+    
     res.status(201).json({
       message: "Sumbangan created successfully",
       sumbangan
@@ -32,8 +46,29 @@ exports.createSumbangan = async (req, res) => {
 
 exports.getAllSumbangan = async (req, res) => {
   try {
-    const sumbangan = await Sumbangan.find({ status: 'aktif' }).sort({ tanggalMulai: -1 });
-    res.json(sumbangan);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalSumbangan = await Sumbangan.countDocuments({ status: 'aktif' });
+    const totalPages = Math.ceil(totalSumbangan / limit);
+    
+    const sumbangan = await Sumbangan.find({ status: 'aktif' })
+      .sort({ tanggalMulai: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    res.json({
+      sumbangan,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalSumbangan: totalSumbangan,
+        sumbanganPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching sumbangan",

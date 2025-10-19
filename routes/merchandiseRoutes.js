@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const merchandiseController = require("../controllers/merchandiseController");
+const uploadMerchandise = require("../middlewares/uploadMerchandise");
 
-router.post("/", merchandiseController.createMerchandise);
+router.post("/", uploadMerchandise.single('gambar'), merchandiseController.createMerchandise);
 router.get("/", merchandiseController.getAllMerchandise);
-router.get("/kategori/:kategori", merchandiseController.getMerchandiseByKategori);
 router.get("/:id", merchandiseController.getMerchandiseById);
-router.put("/:id", merchandiseController.updateMerchandise);
+router.put("/:id", uploadMerchandise.single('gambar'), merchandiseController.updateMerchandise);
 router.delete("/:id", merchandiseController.deleteMerchandise);
 
 module.exports = router;

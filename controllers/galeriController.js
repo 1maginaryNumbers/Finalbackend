@@ -1,5 +1,6 @@
 const Galeri = require("../models/galeri");
 const path = require('path');
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createGaleri = async (req, res) => {
   try {
@@ -28,6 +29,19 @@ exports.createGaleri = async (req, res) => {
     
     await galeri.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'GALERI',
+      entityId: galeri._id,
+      entityName: galeri.judul,
+      description: `Created new galeri image: ${galeri.judul}`,
+      details: { 
+        judul: galeri.judul, 
+        kategori: galeri.kategori,
+        url: galeri.url
+      }
+    });
+    
     res.status(201).json({
       message: "Galeri created successfully",
       galeri
@@ -42,13 +56,34 @@ exports.createGaleri = async (req, res) => {
 
 exports.getAllGaleri = async (req, res) => {
   try {
-    const galeri = await Galeri.find().sort({ tanggalUpload: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalImages = await Galeri.countDocuments();
+    const totalPages = Math.ceil(totalImages / limit);
+    
+    const galeri = await Galeri.find()
+      .sort({ tanggalUpload: -1 })
+      .skip(skip)
+      .limit(limit);
     
     const uniqueKategoris = [...new Set(galeri.map(item => item.kategori))];
-    console.log(`📊 Total gallery items: ${galeri.length}`);
+    console.log(`📊 Total gallery items: ${totalImages}`);
+    console.log(`📄 Page ${page} of ${totalPages} (${galeri.length} items)`);
     console.log(`🏷️  Available kategoris: ${uniqueKategoris.join(', ')}`);
     
-    res.json(galeri);
+    res.json({
+      images: galeri,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalImages: totalImages,
+        imagesPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching galeri",
@@ -111,7 +146,25 @@ exports.updateGaleri = async (req, res) => {
     if (deskripsi) galeri.deskripsi = deskripsi;
     if (kategori) galeri.kategori = kategori;
     
+    // Handle new image upload
+    if (req.file) {
+      galeri.url = `/uploads/galeri/${req.file.filename}`;
+    }
+    
     await galeri.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'GALERI',
+      entityId: galeri._id,
+      entityName: galeri.judul,
+      description: `Updated galeri image: ${galeri.judul}`,
+      details: { 
+        judul: galeri.judul, 
+        kategori: galeri.kategori,
+        url: galeri.url
+      }
+    });
     
     res.json({
       message: "Galeri updated successfully",
@@ -144,11 +197,26 @@ exports.getGaleriKategoris = async (req, res) => {
 
 exports.deleteGaleri = async (req, res) => {
   try {
-    const galeri = await Galeri.findByIdAndDelete(req.params.id);
+    const galeri = await Galeri.findById(req.params.id);
     
     if (!galeri) {
       return res.status(404).json({ message: "Galeri not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'GALERI',
+      entityId: galeri._id,
+      entityName: galeri.judul,
+      description: `Deleted galeri image: ${galeri.judul}`,
+      details: { 
+        judul: galeri.judul, 
+        kategori: galeri.kategori,
+        url: galeri.url
+      }
+    });
+    
+    await Galeri.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Galeri deleted successfully" });
   } catch (err) {

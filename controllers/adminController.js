@@ -1,6 +1,7 @@
 const Admin = require("../models/admin");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.create = async (req, res) => {
   try {
@@ -60,6 +61,17 @@ exports.login = async (req, res) => {
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
+    
+    await logActivity(req, {
+      actionType: 'LOGIN',
+      entityType: 'ADMIN',
+      entityId: admin._id,
+      entityName: admin.username,
+      description: `Admin login: ${admin.username}`,
+      details: { 
+        username: admin.username
+      }
+    });
     
     res.json({ 
       message: "Login successful", 

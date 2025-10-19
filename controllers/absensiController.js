@@ -1,6 +1,7 @@
 const Absensi = require("../models/absensi");
 const Pendaftaran = require("../models/pendaftaran");
 const Umat = require("../models/umat");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.scanQRCode = async (req, res) => {
   try {
@@ -42,6 +43,19 @@ exports.scanQRCode = async (req, res) => {
         existingAbsensi.tanggal = new Date();
         await existingAbsensi.save();
         
+        await logActivity(req, {
+          actionType: 'UPDATE',
+          entityType: 'ABSENSI',
+          entityId: existingAbsensi._id,
+          entityName: pendaftaran.namaLengkap,
+          description: `Updated absensi status: ${pendaftaran.namaLengkap}`,
+          details: { 
+            namaLengkap: pendaftaran.namaLengkap, 
+            kegiatan: pendaftaran.kegiatan?.namaKegiatan || kegiatanId,
+            status: existingAbsensi.status
+          }
+        });
+        
         return res.json({
           message: "Attendance status updated successfully",
           absensi: existingAbsensi,
@@ -59,6 +73,19 @@ exports.scanQRCode = async (req, res) => {
     });
     
     await absensi.save();
+    
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'ABSENSI',
+      entityId: absensi._id,
+      entityName: pendaftaran.namaLengkap,
+      description: `Created new absensi: ${pendaftaran.namaLengkap}`,
+      details: { 
+        namaLengkap: pendaftaran.namaLengkap, 
+        kegiatan: pendaftaran.kegiatan,
+        status: absensi.status
+      }
+    });
     
     res.json({
       message: "Attendance recorded successfully",
@@ -113,6 +140,19 @@ exports.createAbsensi = async (req, res) => {
     
     await absensi.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'ABSENSI',
+      entityId: absensi._id,
+      entityName: pendaftaranData.namaLengkap,
+      description: `Created new absensi: ${pendaftaranData.namaLengkap}`,
+      details: { 
+        namaLengkap: pendaftaranData.namaLengkap, 
+        kegiatan: kegiatan,
+        status: absensi.status
+      }
+    });
+    
     res.status(201).json({
       message: "Absensi created successfully",
       absensi
@@ -127,12 +167,31 @@ exports.createAbsensi = async (req, res) => {
 
 exports.getAllAbsensi = async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalAbsensi = await Absensi.countDocuments();
+    const totalPages = Math.ceil(totalAbsensi / limit);
+    
     const absensi = await Absensi.find()
       .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
       .populate('kegiatan', 'namaKegiatan')
-      .sort({ tanggal: -1 });
+      .sort({ tanggal: -1 })
+      .skip(skip)
+      .limit(limit);
     
-    res.json(absensi);
+    res.json({
+      absensi,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalAbsensi: totalAbsensi,
+        absensiPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching absensi",
@@ -163,7 +222,7 @@ exports.updateAbsensi = async (req, res) => {
   try {
     const { status, tipePerson } = req.body;
     
-    const absensi = await Absensi.findById(req.params.id);
+    const absensi = await Absensi.findById(req.params.id).populate('pendaftaran', 'namaLengkap');
     
     if (!absensi) {
       return res.status(404).json({ message: "Absensi not found" });
@@ -173,6 +232,18 @@ exports.updateAbsensi = async (req, res) => {
     if (tipePerson) absensi.tipePerson = tipePerson;
     
     await absensi.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'ABSENSI',
+      entityId: absensi._id,
+      entityName: absensi.pendaftaran?.namaLengkap || 'Unknown',
+      description: `Updated absensi: ${absensi.pendaftaran?.namaLengkap || 'Unknown'}`,
+      details: { 
+        status: absensi.status,
+        tipePerson: absensi.tipePerson
+      }
+    });
     
     res.json({
       message: "Absensi updated successfully",
@@ -188,11 +259,25 @@ exports.updateAbsensi = async (req, res) => {
 
 exports.deleteAbsensi = async (req, res) => {
   try {
-    const absensi = await Absensi.findByIdAndDelete(req.params.id);
+    const absensi = await Absensi.findById(req.params.id).populate('pendaftaran', 'namaLengkap');
     
     if (!absensi) {
       return res.status(404).json({ message: "Absensi not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'ABSENSI',
+      entityId: absensi._id,
+      entityName: absensi.pendaftaran?.namaLengkap || 'Unknown',
+      description: `Deleted absensi: ${absensi.pendaftaran?.namaLengkap || 'Unknown'}`,
+      details: { 
+        status: absensi.status,
+        tipePerson: absensi.tipePerson
+      }
+    });
+    
+    await Absensi.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Absensi deleted successfully" });
   } catch (err) {

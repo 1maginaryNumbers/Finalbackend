@@ -1,4 +1,5 @@
 const Pengumuman = require("../models/pengumuman");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createPengumuman = async (req, res) => {
   try {
@@ -18,6 +19,18 @@ exports.createPengumuman = async (req, res) => {
     
     await pengumuman.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'PENGUMUMAN',
+      entityId: pengumuman._id,
+      entityName: pengumuman.judul,
+      description: `Created new pengumuman: ${pengumuman.judul}`,
+      details: { 
+        judul: pengumuman.judul, 
+        penulis: req.admin ? req.admin.username : 'Unknown'
+      }
+    });
+    
     const populatedPengumuman = await Pengumuman.findById(pengumuman._id)
       .populate('penulis', 'username');
     
@@ -35,11 +48,30 @@ exports.createPengumuman = async (req, res) => {
 
 exports.getAllPengumuman = async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalPengumuman = await Pengumuman.countDocuments();
+    const totalPages = Math.ceil(totalPengumuman / limit);
+    
     const pengumuman = await Pengumuman.find()
       .populate('penulis', 'username')
-      .sort({ tanggalPublikasi: -1 });
+      .sort({ tanggalPublikasi: -1 })
+      .skip(skip)
+      .limit(limit);
     
-    res.json(pengumuman);
+    res.json({
+      pengumuman,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalPengumuman: totalPengumuman,
+        pengumumanPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching pengumuman",
@@ -81,6 +113,18 @@ exports.updatePengumuman = async (req, res) => {
     
     await pengumuman.save();
     
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'PENGUMUMAN',
+      entityId: pengumuman._id,
+      entityName: pengumuman.judul,
+      description: `Updated pengumuman: ${pengumuman.judul}`,
+      details: { 
+        judul: pengumuman.judul, 
+        penulis: req.admin ? req.admin.username : 'Unknown'
+      }
+    });
+    
     const updatedPengumuman = await Pengumuman.findById(pengumuman._id)
       .populate('penulis', 'username');
     
@@ -98,11 +142,25 @@ exports.updatePengumuman = async (req, res) => {
 
 exports.deletePengumuman = async (req, res) => {
   try {
-    const pengumuman = await Pengumuman.findByIdAndDelete(req.params.id);
+    const pengumuman = await Pengumuman.findById(req.params.id);
     
     if (!pengumuman) {
       return res.status(404).json({ message: "Pengumuman not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'PENGUMUMAN',
+      entityId: pengumuman._id,
+      entityName: pengumuman.judul,
+      description: `Deleted pengumuman: ${pengumuman.judul}`,
+      details: { 
+        judul: pengumuman.judul, 
+        penulis: req.admin ? req.admin.username : 'Unknown'
+      }
+    });
+    
+    await Pengumuman.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Pengumuman deleted successfully" });
   } catch (err) {

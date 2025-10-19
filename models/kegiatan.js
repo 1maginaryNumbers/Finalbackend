@@ -8,7 +8,7 @@ const kegiatanSchema = new mongoose.Schema({
   waktu: { type: String },
   tempat: { type: String },
   kapasitas: { type: Number },
-  status: { type: String, enum: ['akan_datang', 'aktif', 'selesai'], default: 'akan_datang' },
+  status: { type: String, enum: ['akan_datang', 'sedang_berlangsung', 'selesai'], default: 'akan_datang' },
   
 });
 

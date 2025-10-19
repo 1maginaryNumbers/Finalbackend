@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/db");
+const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
@@ -30,6 +31,10 @@ app.use("/api/galeri", require("./routes/galeriRoutes"));
 app.use("/api/info-umum", require("./routes/infoUmumRoutes"));
 app.use("/api/merchandise", require("./routes/merchandiseRoutes"));
 app.use("/api/struktur", require("./routes/strukturRoutes"));
+app.use("/api/activitylog", require("./routes/activityLogRoutes"));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  startScheduler();
+});

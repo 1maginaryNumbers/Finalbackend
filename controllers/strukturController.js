@@ -1,4 +1,5 @@
 const Struktur = require("../models/struktur");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createStruktur = async (req, res) => {
   try {
@@ -18,6 +19,19 @@ exports.createStruktur = async (req, res) => {
     
     await struktur.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'STRUKTUR',
+      entityId: struktur._id,
+      entityName: struktur.nama,
+      description: `Created new struktur: ${struktur.nama}`,
+      details: { 
+        nama: struktur.nama, 
+        jabatan: struktur.jabatan,
+        departemen: struktur.departemen
+      }
+    });
+    
     res.status(201).json({
       message: "Struktur created successfully",
       struktur
@@ -32,8 +46,29 @@ exports.createStruktur = async (req, res) => {
 
 exports.getAllStruktur = async (req, res) => {
   try {
-    const struktur = await Struktur.find({ status: 'aktif' }).sort({ urutan: 1 });
-    res.json(struktur);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalStruktur = await Struktur.countDocuments({ status: 'aktif' });
+    const totalPages = Math.ceil(totalStruktur / limit);
+    
+    const struktur = await Struktur.find({ status: 'aktif' })
+      .sort({ urutan: 1 })
+      .skip(skip)
+      .limit(limit);
+    
+    res.json({
+      struktur,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalStruktur: totalStruktur,
+        strukturPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching struktur",

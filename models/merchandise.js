@@ -5,7 +5,6 @@ const merchandiseSchema = new mongoose.Schema({
   harga: { type: Number, required: true },
   deskripsi: { type: String },
   stok: { type: Number, default: 0 },
-  kategori: { type: String, default: 'umum' },
   gambar: { type: String },
   status: { type: String, enum: ['tersedia', 'habis'], default: 'tersedia' }
 });

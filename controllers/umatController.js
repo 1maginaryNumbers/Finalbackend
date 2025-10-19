@@ -1,4 +1,5 @@
 const Umat = require("../models/umat");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createUmat = async (req, res) => {
   try {
@@ -24,6 +25,15 @@ exports.createUmat = async (req, res) => {
     
     await umat.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'UMAT',
+      entityId: umat._id,
+      entityName: umat.nama,
+      description: `Created new umat: ${umat.nama}`,
+      details: { nama: umat.nama, email: umat.email }
+    });
+    
     res.status(201).json({
       message: "Umat created successfully",
       umat
@@ -38,8 +48,29 @@ exports.createUmat = async (req, res) => {
 
 exports.getAllUmat = async (req, res) => {
   try {
-    const umat = await Umat.find().sort({ nama: 1 });
-    res.json(umat);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalUmat = await Umat.countDocuments();
+    const totalPages = Math.ceil(totalUmat / limit);
+    
+    const umat = await Umat.find()
+      .sort({ nama: 1 })
+      .skip(skip)
+      .limit(limit);
+    
+    res.json({
+      umat,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalUmat: totalUmat,
+        umatPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching umat",
@@ -89,6 +120,15 @@ exports.updateUmat = async (req, res) => {
     
     await umat.save();
     
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'UMAT',
+      entityId: umat._id,
+      entityName: umat.nama,
+      description: `Updated umat: ${umat.nama}`,
+      details: { nama: umat.nama, email: umat.email }
+    });
+    
     res.json({
       message: "Umat updated successfully",
       umat
@@ -103,11 +143,22 @@ exports.updateUmat = async (req, res) => {
 
 exports.deleteUmat = async (req, res) => {
   try {
-    const umat = await Umat.findByIdAndDelete(req.params.id);
+    const umat = await Umat.findById(req.params.id);
     
     if (!umat) {
       return res.status(404).json({ message: "Umat not found" });
     }
+    
+    await Umat.findByIdAndDelete(req.params.id);
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'UMAT',
+      entityId: umat._id,
+      entityName: umat.nama,
+      description: `Deleted umat: ${umat.nama}`,
+      details: { nama: umat.nama, email: umat.email }
+    });
     
     res.json({ message: "Umat deleted successfully" });
   } catch (err) {

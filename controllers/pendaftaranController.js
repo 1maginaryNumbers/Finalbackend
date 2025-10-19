@@ -1,11 +1,13 @@
 const Pendaftaran = require("../models/pendaftaran");
 const Kegiatan = require("../models/kegiatan");
+const Umat = require("../models/umat");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createPendaftaran = async (req, res) => {
   try {
-    const { kegiatan, namaLengkap, email, nomorTelepon, tipePerson } = req.body;
+    const { kegiatan, namaLengkap, email, nomorTelepon } = req.body;
     
     if (!kegiatan || !namaLengkap || !email || !nomorTelepon) {
       return res.status(400).json({ message: "All fields are required" });
@@ -16,6 +18,21 @@ exports.createPendaftaran = async (req, res) => {
       return res.status(404).json({ message: "Kegiatan not found" });
     }
     
+    // Check if user is already registered for this activity
+    const existingRegistration = await Pendaftaran.findOne({
+      kegiatan: kegiatan,
+      email: email
+    });
+    
+    if (existingRegistration) {
+      return res.status(400).json({ 
+        message: "Anda sudah terdaftar untuk kegiatan ini sebelumnya" 
+      });
+    }
+    
+    const existingUmat = await Umat.findOne({ email: email });
+    const tipePerson = existingUmat ? 'internal' : 'external';
+    
     const qrCodeData = crypto.randomBytes(16).toString('hex');
     const qrCodeImage = await QRCode.toDataURL(qrCodeData);
     
@@ -25,12 +42,26 @@ exports.createPendaftaran = async (req, res) => {
       namaLengkap,
       email,
       nomorTelepon,
-      tipePerson: tipePerson || 'external',
+      tipePerson,
       qrCode: qrCodeImage,
       qrCodeData: qrCodeData
     });
     
     await pendaftaran.save();
+    
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'PENDAFTARAN',
+      entityId: pendaftaran._id,
+      entityName: pendaftaran.namaLengkap,
+      description: `Created new pendaftaran: ${pendaftaran.namaLengkap} for ${kegiatanExists.namaKegiatan}`,
+      details: { 
+        namaLengkap: pendaftaran.namaLengkap, 
+        email: pendaftaran.email,
+        kegiatan: kegiatanExists.namaKegiatan,
+        tipePerson: pendaftaran.tipePerson
+      }
+    });
     
     res.status(201).json({
       message: "Pendaftaran successful",
@@ -85,6 +116,9 @@ exports.daftarKegiatan = async (req, res) => {
             continue;
           }
           
+          const existingUmat = await Umat.findOne({ email: p.email });
+          const tipePerson = existingUmat ? 'internal' : 'external';
+          
           const qrCode = crypto.randomBytes(16).toString('hex');
           
           const pendaftaran = new Pendaftaran({
@@ -93,7 +127,7 @@ exports.daftarKegiatan = async (req, res) => {
             namaLengkap: p.namaLengkap,
             email: p.email,
             nomorTelepon: p.nomorTelepon,
-            tipePerson: p.tipePerson || 'external',
+            tipePerson,
             qrCode
           });
           
@@ -155,6 +189,27 @@ exports.daftarKegiatan = async (req, res) => {
   }
 };
 
+exports.checkRegistrationStatus = async (req, res) => {
+  try {
+    const { kegiatanId, email } = req.params;
+    
+    const existingRegistration = await Pendaftaran.findOne({
+      kegiatan: kegiatanId,
+      email: email
+    });
+    
+    res.json({
+      isRegistered: !!existingRegistration,
+      registration: existingRegistration
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error checking registration status",
+      error: err.message
+    });
+  }
+};
+
 exports.getPendaftaranByKegiatan = async (req, res) => {
   try {
     const { kegiatanId } = req.params;
@@ -173,10 +228,29 @@ exports.getPendaftaranByKegiatan = async (req, res) => {
 
 exports.getAllPendaftaran = async (req, res) => {
   try {
-    const pendaftaran = await Pendaftaran.find()
-      .sort({ tanggalDaftar: -1 });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
     
-    res.json(pendaftaran);
+    const totalPendaftaran = await Pendaftaran.countDocuments();
+    const totalPages = Math.ceil(totalPendaftaran / limit);
+    
+    const pendaftaran = await Pendaftaran.find()
+      .sort({ tanggalDaftar: -1 })
+      .skip(skip)
+      .limit(limit);
+    
+    res.json({
+      pendaftaran,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalPendaftaran: totalPendaftaran,
+        pendaftaranPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching pendaftaran",

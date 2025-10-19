@@ -1,4 +1,5 @@
 const Saran = require("../models/saran");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createSaran = async (req, res) => {
   try {
@@ -15,6 +16,18 @@ exports.createSaran = async (req, res) => {
     });
     
     await saran.save();
+    
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'SARAN',
+      entityId: saran._id,
+      entityName: saran.nama,
+      description: `Created new saran from: ${saran.nama}`,
+      details: { 
+        nama: saran.nama, 
+        email: saran.email
+      }
+    });
     
     res.status(201).json({
       message: "Saran submitted successfully",

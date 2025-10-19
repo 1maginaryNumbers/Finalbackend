@@ -1,4 +1,5 @@
 const Kegiatan = require("../models/kegiatan");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.createKegiatan = async (req, res) => {
   try {
@@ -21,6 +22,19 @@ exports.createKegiatan = async (req, res) => {
     
     await kegiatan.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'KEGIATAN',
+      entityId: kegiatan._id,
+      entityName: kegiatan.namaKegiatan,
+      description: `Created new kegiatan: ${kegiatan.namaKegiatan}`,
+      details: { 
+        namaKegiatan: kegiatan.namaKegiatan, 
+        tanggalMulai: kegiatan.tanggalMulai,
+        tempat: kegiatan.tempat 
+      }
+    });
+    
     res.status(201).json({
       message: "Kegiatan created successfully",
       kegiatan
@@ -35,8 +49,29 @@ exports.createKegiatan = async (req, res) => {
 
 exports.getAllKegiatan = async (req, res) => {
   try {
-    const kegiatan = await Kegiatan.find().sort({ tanggalMulai: 1 });
-    res.json(kegiatan);
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    
+    const totalKegiatan = await Kegiatan.countDocuments();
+    const totalPages = Math.ceil(totalKegiatan / limit);
+    
+    const kegiatan = await Kegiatan.find()
+      .sort({ tanggalMulai: 1 })
+      .skip(skip)
+      .limit(limit);
+    
+    res.json({
+      kegiatan,
+      pagination: {
+        currentPage: page,
+        totalPages: totalPages,
+        totalKegiatan: totalKegiatan,
+        kegiatanPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     res.status(500).json({
       message: "Error fetching kegiatan",
@@ -83,6 +118,20 @@ exports.updateKegiatan = async (req, res) => {
     
     await kegiatan.save();
     
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'KEGIATAN',
+      entityId: kegiatan._id,
+      entityName: kegiatan.namaKegiatan,
+      description: `Updated kegiatan: ${kegiatan.namaKegiatan}`,
+      details: { 
+        namaKegiatan: kegiatan.namaKegiatan, 
+        tanggalMulai: kegiatan.tanggalMulai,
+        tempat: kegiatan.tempat,
+        status: kegiatan.status
+      }
+    });
+    
     res.json({
       message: "Kegiatan updated successfully",
       kegiatan
@@ -97,11 +146,26 @@ exports.updateKegiatan = async (req, res) => {
 
 exports.deleteKegiatan = async (req, res) => {
   try {
-    const kegiatan = await Kegiatan.findByIdAndDelete(req.params.id);
+    const kegiatan = await Kegiatan.findById(req.params.id);
     
     if (!kegiatan) {
       return res.status(404).json({ message: "Kegiatan not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'KEGIATAN',
+      entityId: kegiatan._id,
+      entityName: kegiatan.namaKegiatan,
+      description: `Deleted kegiatan: ${kegiatan.namaKegiatan}`,
+      details: { 
+        namaKegiatan: kegiatan.namaKegiatan, 
+        tanggalMulai: kegiatan.tanggalMulai,
+        tempat: kegiatan.tempat
+      }
+    });
+    
+    await Kegiatan.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Kegiatan deleted successfully" });
   } catch (err) {
