@@ -8,7 +8,19 @@ const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
-app.use(cors());
+const corsOptions = {
+  origin: [
+    'https://bdcadmin.vercel.app',
+    'https://bdctemple.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 if (fs.existsSync(path.join(__dirname, 'uploads'))) {
@@ -35,6 +47,19 @@ app.use("/api/info-umum", require("./routes/infoUmumRoutes"));
 app.use("/api/merchandise", require("./routes/merchandiseRoutes"));
 app.use("/api/struktur", require("./routes/strukturRoutes"));
 app.use("/api/activitylog", require("./routes/activityLogRoutes"));
+
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin,
+    cors: 'configured'
+  });
+});
+
+app.options('*', (req, res) => {
+  res.sendStatus(200);
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

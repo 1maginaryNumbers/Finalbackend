@@ -2,6 +2,10 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/admin");
 
 const authMiddleware = async (req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
     
