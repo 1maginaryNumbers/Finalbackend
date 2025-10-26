@@ -16,8 +16,10 @@ exports.createGaleri = async (req, res) => {
     let imageUrl = '';
     
     if (req.file) {
-      imageUrl = `/uploads/galeri/${req.file.filename}`;
-      console.log('File uploaded successfully:', req.file.filename, 'Size:', req.file.size);
+      const imageBuffer = req.file.buffer;
+      const imageBase64 = imageBuffer.toString('base64');
+      imageUrl = `data:${req.file.mimetype};base64,${imageBase64}`;
+      console.log('File uploaded successfully, Size:', req.file.size, 'Type:', req.file.mimetype);
     } else if (req.body.url) {
       imageUrl = req.body.url;
     } else {
