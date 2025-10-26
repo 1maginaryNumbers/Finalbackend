@@ -20,7 +20,17 @@ exports.createGaleri = async (req, res) => {
       const imageBase64 = imageBuffer.toString('base64');
       const mimetype = req.file.mimetype || 'image/jpeg';
       imageUrl = `data:${mimetype};base64,${imageBase64}`;
-      console.log('File uploaded successfully, Size:', req.file.size, 'Type:', mimetype, 'Base64 length:', imageBase64.length);
+      
+      const dataUrlLength = imageUrl.length;
+      console.log('File uploaded successfully');
+      console.log('- Buffer size:', imageBuffer.length, 'bytes');
+      console.log('- Base64 length:', imageBase64.length, 'chars');
+      console.log('- Full data URL length:', dataUrlLength, 'chars');
+      console.log('- MIME type:', mimetype);
+      
+      if (dataUrlLength > 1000000) {
+        console.warn('Large data URL detected (>1MB):', dataUrlLength, 'chars');
+      }
     } else if (req.body.url) {
       imageUrl = req.body.url;
     } else {
