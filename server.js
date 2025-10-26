@@ -8,33 +8,32 @@ const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'https://bdcadmin.vercel.app',
-      'https://bdctemple.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'https://bdcadmin-ochre.vercel.app',
-      'https://bdctemple-ochre.vercel.app'
-    ];
-    
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  preflightContinue: false,
-  optionsSuccessStatus: 200
-};
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://bdcadmin.vercel.app',
+    'https://bdctemple.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002'
+  ];
+  
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+});
 
-app.use(cors(corsOptions));
 app.use(express.json());
 
 if (fs.existsSync(path.join(__dirname, 'uploads'))) {
