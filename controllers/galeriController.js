@@ -54,7 +54,8 @@ exports.createGaleri = async (req, res) => {
     console.error('Error creating galeri:', err);
     res.status(500).json({
       message: "Error creating galeri",
-      error: err.message
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 };
