@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const connectDB = require("./config/db");
 const { startScheduler } = require("./utils/scheduler");
 
@@ -10,7 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+if (fs.existsSync(path.join(__dirname, 'uploads'))) {
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}
 
 if (!process.env.JWT_SECRET) {
   console.log("Warning: JWT_SECRET not set in .env file. Using default secret.");
