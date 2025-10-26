@@ -6,6 +6,9 @@ exports.createGaleri = async (req, res) => {
   try {
     const { judul, deskripsi, kategori } = req.body;
     
+    console.log('Request body:', { judul, deskripsi, kategori });
+    console.log('Request file:', req.file ? { filename: req.file.filename, size: req.file.size, mimetype: req.file.mimetype } : 'No file');
+    
     if (!judul) {
       return res.status(400).json({ message: "Judul is required" });
     }
@@ -14,6 +17,7 @@ exports.createGaleri = async (req, res) => {
     
     if (req.file) {
       imageUrl = `/uploads/galeri/${req.file.filename}`;
+      console.log('File uploaded successfully:', req.file.filename, 'Size:', req.file.size);
     } else if (req.body.url) {
       imageUrl = req.body.url;
     } else {
@@ -47,6 +51,7 @@ exports.createGaleri = async (req, res) => {
       galeri
     });
   } catch (err) {
+    console.error('Error creating galeri:', err);
     res.status(500).json({
       message: "Error creating galeri",
       error: err.message
