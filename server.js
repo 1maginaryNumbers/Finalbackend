@@ -9,15 +9,29 @@ const { startScheduler } = require("./utils/scheduler");
 const app = express();
 
 const corsOptions = {
-  origin: [
-    'https://bdcadmin.vercel.app',
-    'https://bdctemple.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001'
-  ],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'https://bdcadmin.vercel.app',
+      'https://bdctemple.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'https://bdcadmin-ochre.vercel.app',
+      'https://bdctemple-ochre.vercel.app'
+    ];
+    
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -47,6 +61,11 @@ app.use("/api/info-umum", require("./routes/infoUmumRoutes"));
 app.use("/api/merchandise", require("./routes/merchandiseRoutes"));
 app.use("/api/struktur", require("./routes/strukturRoutes"));
 app.use("/api/activitylog", require("./routes/activityLogRoutes"));
+
+app.use((req, res, next) => {
+  console.log('Request from origin:', req.headers.origin);
+  next();
+});
 
 app.get('/health', (req, res) => {
   res.json({ 
