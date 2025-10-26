@@ -12,6 +12,7 @@ app.use((req, res, next) => {
   const allowedOrigins = [
     'https://bdcadmin.vercel.app',
     'https://bdctemple.vercel.app',
+    'https://viharabdc.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002'
