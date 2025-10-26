@@ -165,9 +165,18 @@ exports.updateGaleri = async (req, res) => {
     if (deskripsi) galeri.deskripsi = deskripsi;
     if (kategori) galeri.kategori = kategori;
     
-    // Handle new image upload
-    if (req.file) {
-      galeri.url = `/uploads/galeri/${req.file.filename}`;
+    if (req.file && req.file.buffer) {
+      const imageBuffer = req.file.buffer;
+      const imageBase64 = imageBuffer.toString('base64');
+      const mimetype = req.file.mimetype || 'image/jpeg';
+      const imageUrl = `data:${mimetype};base64,${imageBase64}`;
+      
+      galeri.url = imageUrl;
+      
+      console.log('File updated successfully');
+      console.log('- Buffer size:', imageBuffer.length, 'bytes');
+      console.log('- Base64 length:', imageBase64.length, 'chars');
+      console.log('- MIME type:', mimetype);
     }
     
     await galeri.save();
@@ -190,9 +199,11 @@ exports.updateGaleri = async (req, res) => {
       galeri
     });
   } catch (err) {
+    console.error('Error updating galeri:', err);
     res.status(500).json({
       message: "Error updating galeri",
-      error: err.message
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
     });
   }
 };
