@@ -4,7 +4,7 @@ async function testPengumuman() {
   try {
     console.log('Testing pengumuman endpoint...');
     
-    const response = await axios.get('http://localhost:5000/api/pengumuman');
+    const response = await axios.get('https://finalbackend-ochre.vercel.app/api/pengumuman');
     console.log('✅ Pengumuman endpoint working!');
     console.log('Response:', response.data);
     
