@@ -1,4 +1,5 @@
 const Jadwal = require("../models/jadwal");
+const Kegiatan = require("../models/kegiatan");
 const { logActivity } = require("../utils/activityLogger");
 
 exports.createJadwal = async (req, res) => {
@@ -21,6 +22,22 @@ exports.createJadwal = async (req, res) => {
     
     await jadwal.save();
     await jadwal.populate('kategori');
+    
+    // Create corresponding kegiatan with status "akan_datang"
+    const kegiatanDate = new Date(tanggal);
+    const kegiatan = new Kegiatan({
+      namaKegiatan: judul,
+      deskripsi: deskripsi || '',
+      tanggalMulai: kegiatanDate,
+      tanggalSelesai: kegiatanDate,
+      waktuMulai,
+      waktuSelesai,
+      tempat,
+      kategori,
+      status: 'akan_datang'
+    });
+    
+    await kegiatan.save();
     
     await logActivity(req, {
       actionType: 'CREATE',

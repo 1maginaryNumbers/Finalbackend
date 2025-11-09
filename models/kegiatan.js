@@ -9,6 +9,7 @@ const kegiatanSchema = new mongoose.Schema({
   waktuSelesai: { type: String },
   tempat: { type: String },
   kapasitas: { type: Number },
+  kategori: { type: mongoose.Schema.Types.ObjectId, ref: 'KategoriJadwal' },
   status: { type: String, enum: ['akan_datang', 'sedang_berlangsung', 'selesai'], default: 'akan_datang' },
   
 });

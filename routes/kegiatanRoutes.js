@@ -11,6 +11,7 @@ router.post("/:kegiatanId/daftar-kegiatan", authMiddleware, pendaftaranControlle
 router.get("/:kegiatanId/pendaftaran", pendaftaranController.getPendaftaranByKegiatan);
 router.get("/:id", kegiatanController.getKegiatanById);
 router.put("/:id", authMiddleware, kegiatanController.updateKegiatan);
+router.put("/:id/activate", authMiddleware, kegiatanController.activateKegiatan);
 router.delete("/:id", authMiddleware, kegiatanController.deleteKegiatan);
 
 module.exports = router;
