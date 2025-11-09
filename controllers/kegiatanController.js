@@ -3,7 +3,7 @@ const { logActivity } = require("../utils/activityLogger");
 
 exports.createKegiatan = async (req, res) => {
   try {
-    const { namaKegiatan, deskripsi, tanggalMulai, tanggalSelesai, waktu, tempat, kapasitas, status } = req.body;
+    const { namaKegiatan, deskripsi, tanggalMulai, tanggalSelesai, waktuMulai, waktuSelesai, tempat, kapasitas, status } = req.body;
     
     if (!namaKegiatan || !deskripsi || !tanggalMulai || !tanggalSelesai) {
       return res.status(400).json({ message: "Required fields missing" });
@@ -14,7 +14,8 @@ exports.createKegiatan = async (req, res) => {
       deskripsi,
       tanggalMulai,
       tanggalSelesai,
-      waktu,
+      waktuMulai,
+      waktuSelesai,
       tempat,
       kapasitas,
       status: status || 'akan_datang'
@@ -116,7 +117,7 @@ exports.getKegiatanById = async (req, res) => {
 
 exports.updateKegiatan = async (req, res) => {
   try {
-    const { namaKegiatan, deskripsi, tanggalMulai, tanggalSelesai, waktu, tempat, kapasitas, status } = req.body;
+    const { namaKegiatan, deskripsi, tanggalMulai, tanggalSelesai, waktuMulai, waktuSelesai, tempat, kapasitas, status } = req.body;
     
     const kegiatan = await Kegiatan.findById(req.params.id);
     
@@ -128,7 +129,8 @@ exports.updateKegiatan = async (req, res) => {
     if (deskripsi) kegiatan.deskripsi = deskripsi;
     if (tanggalMulai) kegiatan.tanggalMulai = tanggalMulai;
     if (tanggalSelesai) kegiatan.tanggalSelesai = tanggalSelesai;
-    if (waktu) kegiatan.waktu = waktu;
+    if (waktuMulai !== undefined) kegiatan.waktuMulai = waktuMulai;
+    if (waktuSelesai !== undefined) kegiatan.waktuSelesai = waktuSelesai;
     if (tempat) kegiatan.tempat = tempat;
     if (kapasitas) kegiatan.kapasitas = kapasitas;
     if (status) kegiatan.status = status;
