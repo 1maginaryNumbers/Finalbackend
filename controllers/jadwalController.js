@@ -4,7 +4,7 @@ const { logActivity } = require("../utils/activityLogger");
 
 exports.createJadwal = async (req, res) => {
   try {
-    const { judul, deskripsi, tanggal, waktuMulai, waktuSelesai, kategori, tempat } = req.body;
+    const { judul, deskripsi, tanggal, waktuMulai, waktuSelesai, kategori, tempat, kapasitas } = req.body;
     
     if (!judul || !tanggal) {
       return res.status(400).json({ message: "Judul and tanggal are required" });
@@ -17,7 +17,8 @@ exports.createJadwal = async (req, res) => {
       waktuMulai,
       waktuSelesai,
       kategori,
-      tempat
+      tempat,
+      kapasitas
     });
     
     await jadwal.save();
@@ -33,6 +34,7 @@ exports.createJadwal = async (req, res) => {
       waktuMulai,
       waktuSelesai,
       tempat,
+      kapasitas,
       kategori,
       status: 'akan_datang'
     });
@@ -103,7 +105,7 @@ exports.getJadwalById = async (req, res) => {
 
 exports.updateJadwal = async (req, res) => {
   try {
-    const { judul, deskripsi, tanggal, waktuMulai, waktuSelesai, kategori, tempat } = req.body;
+    const { judul, deskripsi, tanggal, waktuMulai, waktuSelesai, kategori, tempat, kapasitas } = req.body;
     
     const jadwal = await Jadwal.findById(req.params.id);
     
@@ -118,6 +120,7 @@ exports.updateJadwal = async (req, res) => {
     if (waktuSelesai !== undefined) jadwal.waktuSelesai = waktuSelesai;
     if (kategori !== undefined) jadwal.kategori = kategori;
     if (tempat !== undefined) jadwal.tempat = tempat;
+    if (kapasitas !== undefined) jadwal.kapasitas = kapasitas;
     jadwal.updatedAt = new Date();
     
     await jadwal.save();

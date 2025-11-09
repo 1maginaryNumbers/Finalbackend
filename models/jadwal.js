@@ -8,6 +8,7 @@ const jadwalSchema = new mongoose.Schema({
   waktuSelesai: { type: String },
   kategori: { type: mongoose.Schema.Types.ObjectId, ref: 'KategoriJadwal' },
   tempat: { type: String },
+  kapasitas: { type: Number },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
