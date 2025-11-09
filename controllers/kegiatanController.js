@@ -39,7 +39,9 @@ exports.createKegiatan = async (req, res) => {
         waktuMulai,
         waktuSelesai,
         kategori,
-        tempat
+        tempat,
+        kapasitas,
+        kegiatanId: kegiatan._id
       });
       await jadwal.save();
       
@@ -164,6 +166,33 @@ exports.updateKegiatan = async (req, res) => {
     await kegiatan.save();
     await kegiatan.populate('kategori');
     
+    // Update corresponding jadwal entries
+    // First, delete old jadwal entries for this kegiatan
+    await Jadwal.deleteMany({ kegiatanId: kegiatan._id });
+    
+    // Then create new jadwal entries with updated data
+    const startDate = new Date(kegiatan.tanggalMulai);
+    const endDate = new Date(kegiatan.tanggalSelesai);
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      const jadwal = new Jadwal({
+        judul: kegiatan.namaKegiatan,
+        deskripsi: kegiatan.deskripsi,
+        tanggal: new Date(currentDate),
+        waktuMulai: kegiatan.waktuMulai,
+        waktuSelesai: kegiatan.waktuSelesai,
+        kategori: kegiatan.kategori,
+        tempat: kegiatan.tempat,
+        kapasitas: kegiatan.kapasitas,
+        kegiatanId: kegiatan._id
+      });
+      await jadwal.save();
+      
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
     await logActivity(req, {
       actionType: 'UPDATE',
       entityType: 'KEGIATAN',
@@ -210,6 +239,9 @@ exports.deleteKegiatan = async (req, res) => {
         tempat: kegiatan.tempat
       }
     });
+    
+    // Delete corresponding jadwal entries
+    await Jadwal.deleteMany({ kegiatanId: kegiatan._id });
     
     await Kegiatan.findByIdAndDelete(req.params.id);
     

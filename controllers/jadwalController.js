@@ -10,21 +10,7 @@ exports.createJadwal = async (req, res) => {
       return res.status(400).json({ message: "Judul and tanggal are required" });
     }
     
-    const jadwal = new Jadwal({
-      judul,
-      deskripsi,
-      tanggal: new Date(tanggal),
-      waktuMulai,
-      waktuSelesai,
-      kategori,
-      tempat,
-      kapasitas
-    });
-    
-    await jadwal.save();
-    await jadwal.populate('kategori');
-    
-    // Create corresponding kegiatan with status "akan_datang"
+    // Create corresponding kegiatan with status "akan_datang" first
     const kegiatanDate = new Date(tanggal);
     const kegiatan = new Kegiatan({
       namaKegiatan: judul,
@@ -40,6 +26,22 @@ exports.createJadwal = async (req, res) => {
     });
     
     await kegiatan.save();
+    
+    // Create jadwal linked to the kegiatan
+    const jadwal = new Jadwal({
+      judul,
+      deskripsi,
+      tanggal: new Date(tanggal),
+      waktuMulai,
+      waktuSelesai,
+      kategori,
+      tempat,
+      kapasitas,
+      kegiatanId: kegiatan._id
+    });
+    
+    await jadwal.save();
+    await jadwal.populate('kategori');
     
     await logActivity(req, {
       actionType: 'CREATE',
@@ -126,6 +128,48 @@ exports.updateJadwal = async (req, res) => {
     await jadwal.save();
     await jadwal.populate('kategori');
     
+    // If this jadwal is linked to a kegiatan, update the kegiatan as well
+    if (jadwal.kegiatanId) {
+      const kegiatan = await Kegiatan.findById(jadwal.kegiatanId);
+      if (kegiatan) {
+        // Update kegiatan fields if they were changed in jadwal
+        if (judul) kegiatan.namaKegiatan = judul;
+        if (deskripsi !== undefined) kegiatan.deskripsi = deskripsi;
+        if (tanggal) {
+          kegiatan.tanggalMulai = new Date(tanggal);
+          kegiatan.tanggalSelesai = new Date(tanggal);
+        }
+        if (waktuMulai !== undefined) kegiatan.waktuMulai = waktuMulai;
+        if (waktuSelesai !== undefined) kegiatan.waktuSelesai = waktuSelesai;
+        if (tempat !== undefined) kegiatan.tempat = tempat;
+        if (kapasitas !== undefined) kegiatan.kapasitas = kapasitas;
+        if (kategori !== undefined) kegiatan.kategori = kategori;
+        await kegiatan.save();
+        
+        // Recreate all jadwal entries for this kegiatan to keep them in sync
+        await Jadwal.deleteMany({ kegiatanId: kegiatan._id });
+        const startDate = new Date(kegiatan.tanggalMulai);
+        const endDate = new Date(kegiatan.tanggalSelesai);
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          const newJadwal = new Jadwal({
+            judul: kegiatan.namaKegiatan,
+            deskripsi: kegiatan.deskripsi,
+            tanggal: new Date(currentDate),
+            waktuMulai: kegiatan.waktuMulai,
+            waktuSelesai: kegiatan.waktuSelesai,
+            kategori: kegiatan.kategori,
+            tempat: kegiatan.tempat,
+            kapasitas: kegiatan.kapasitas,
+            kegiatanId: kegiatan._id
+          });
+          await newJadwal.save();
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+    }
+    
     await logActivity(req, {
       actionType: 'UPDATE',
       entityType: 'JADWAL',
@@ -155,6 +199,15 @@ exports.deleteJadwal = async (req, res) => {
       return res.status(404).json({ message: "Jadwal not found" });
     }
     
+    // If this jadwal is linked to a kegiatan, delete the entire kegiatan and all its jadwal entries
+    if (jadwal.kegiatanId) {
+      await Kegiatan.findByIdAndDelete(jadwal.kegiatanId);
+      await Jadwal.deleteMany({ kegiatanId: jadwal.kegiatanId });
+    } else {
+      // If not linked to kegiatan, just delete this jadwal
+      await Jadwal.findByIdAndDelete(req.params.id);
+    }
+    
     await logActivity(req, {
       actionType: 'DELETE',
       entityType: 'JADWAL',
@@ -163,8 +216,6 @@ exports.deleteJadwal = async (req, res) => {
       description: `Deleted schedule: ${jadwal.judul}`,
       details: { judul: jadwal.judul, tanggal: jadwal.tanggal }
     });
-    
-    await Jadwal.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Jadwal deleted successfully" });
   } catch (err) {
