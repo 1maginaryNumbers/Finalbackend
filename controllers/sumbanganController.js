@@ -4,15 +4,27 @@ const Transaksi = require("../models/transaksi");
 
 exports.createSumbangan = async (req, res) => {
   try {
-    const { namaPaket, deskripsi, targetDana, tanggalSelesai } = req.body;
+    const { namaEvent, deskripsi, bankName, bankNumber, targetDana, tanggalSelesai } = req.body;
     
-    if (!namaPaket || !targetDana) {
-      return res.status(400).json({ message: "Nama paket and target dana are required" });
+    if (!namaEvent || !targetDana || !bankName || !bankNumber) {
+      return res.status(400).json({ message: "Nama event, target dana, bank name, and bank number are required" });
+    }
+    
+    let qrisImage = '';
+    
+    if (req.file && req.file.buffer) {
+      const imageBuffer = req.file.buffer;
+      const imageBase64 = imageBuffer.toString('base64');
+      const mimetype = req.file.mimetype || 'image/jpeg';
+      qrisImage = `data:${mimetype};base64,${imageBase64}`;
     }
     
     const sumbangan = new Sumbangan({
-      namaPaket,
+      namaEvent,
       deskripsi,
+      bankName,
+      bankNumber,
+      qrisImage,
       targetDana,
       tanggalSelesai
     });
@@ -23,12 +35,12 @@ exports.createSumbangan = async (req, res) => {
       actionType: 'CREATE',
       entityType: 'SUMBANGAN',
       entityId: sumbangan._id,
-      entityName: sumbangan.namaDonatur,
-      description: `Created new sumbangan from: ${sumbangan.namaDonatur}`,
+      entityName: sumbangan.namaEvent,
+      description: `Created new donation event: ${sumbangan.namaEvent}`,
       details: { 
-        namaDonatur: sumbangan.namaDonatur, 
-        jumlah: sumbangan.jumlah,
-        metode: sumbangan.metode
+        namaEvent: sumbangan.namaEvent, 
+        targetDana: sumbangan.targetDana,
+        bankName: sumbangan.bankName
       }
     });
     
@@ -96,7 +108,7 @@ exports.getSumbanganById = async (req, res) => {
 
 exports.updateSumbangan = async (req, res) => {
   try {
-    const { namaPaket, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai } = req.body;
+    const { namaEvent, deskripsi, bankName, bankNumber, targetDana, danaTerkumpul, status, tanggalSelesai } = req.body;
     
     const sumbangan = await Sumbangan.findById(req.params.id);
     
@@ -104,12 +116,21 @@ exports.updateSumbangan = async (req, res) => {
       return res.status(404).json({ message: "Sumbangan not found" });
     }
     
-    if (namaPaket) sumbangan.namaPaket = namaPaket;
-    if (deskripsi) sumbangan.deskripsi = deskripsi;
+    if (namaEvent) sumbangan.namaEvent = namaEvent;
+    if (deskripsi !== undefined) sumbangan.deskripsi = deskripsi;
+    if (bankName) sumbangan.bankName = bankName;
+    if (bankNumber) sumbangan.bankNumber = bankNumber;
     if (targetDana) sumbangan.targetDana = targetDana;
     if (danaTerkumpul !== undefined) sumbangan.danaTerkumpul = danaTerkumpul;
     if (status) sumbangan.status = status;
     if (tanggalSelesai) sumbangan.tanggalSelesai = tanggalSelesai;
+    
+    if (req.file && req.file.buffer) {
+      const imageBuffer = req.file.buffer;
+      const imageBase64 = imageBuffer.toString('base64');
+      const mimetype = req.file.mimetype || 'image/jpeg';
+      sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
+    }
     
     await sumbangan.save();
     
