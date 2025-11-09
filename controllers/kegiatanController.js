@@ -53,16 +53,33 @@ exports.getAllKegiatan = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     
-    const totalKegiatan = await Kegiatan.countDocuments();
-    const totalPages = Math.ceil(totalKegiatan / limit);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    const kegiatan = await Kegiatan.find()
-      .sort({ tanggalMulai: 1 })
-      .skip(skip)
-      .limit(limit);
+    const allKegiatan = await Kegiatan.find()
+      .sort({ tanggalMulai: 1 });
+    
+    const updatedKegiatan = await Promise.all(
+      allKegiatan.map(async (item) => {
+        if (item.tanggalSelesai && item.status !== 'selesai') {
+          const endDate = new Date(item.tanggalSelesai);
+          endDate.setHours(0, 0, 0, 0);
+          
+          if (endDate < today) {
+            item.status = 'selesai';
+            await item.save();
+          }
+        }
+        return item;
+      })
+    );
+    
+    const totalKegiatan = updatedKegiatan.length;
+    const totalPages = Math.ceil(totalKegiatan / limit);
+    const paginatedKegiatan = updatedKegiatan.slice(skip, skip + limit);
     
     res.json({
-      kegiatan,
+      kegiatan: paginatedKegiatan,
       pagination: {
         currentPage: page,
         totalPages: totalPages,
