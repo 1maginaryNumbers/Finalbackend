@@ -62,16 +62,33 @@ exports.getAllSumbangan = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
     
-    const totalSumbangan = await Sumbangan.countDocuments({ status: 'aktif' });
-    const totalPages = Math.ceil(totalSumbangan / limit);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    const sumbangan = await Sumbangan.find({ status: 'aktif' })
-      .sort({ tanggalMulai: -1 })
-      .skip(skip)
-      .limit(limit);
+    const allSumbangan = await Sumbangan.find()
+      .sort({ tanggalMulai: -1 });
+    
+    const updatedSumbangan = await Promise.all(
+      allSumbangan.map(async (item) => {
+        if (item.tanggalSelesai && item.status === 'aktif') {
+          const endDate = new Date(item.tanggalSelesai);
+          endDate.setHours(0, 0, 0, 0);
+          
+          if (endDate < today) {
+            item.status = 'selesai';
+            await item.save();
+          }
+        }
+        return item;
+      })
+    );
+    
+    const totalSumbangan = updatedSumbangan.length;
+    const totalPages = Math.ceil(totalSumbangan / limit);
+    const paginatedSumbangan = updatedSumbangan.slice(skip, skip + limit);
     
     res.json({
-      sumbangan,
+      sumbangan: paginatedSumbangan,
       pagination: {
         currentPage: page,
         totalPages: totalPages,
