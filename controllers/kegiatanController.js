@@ -293,3 +293,51 @@ exports.activateKegiatan = async (req, res) => {
     });
   }
 };
+
+exports.bulkDeleteKegiatan = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Array of IDs is required" });
+    }
+    
+    const kegiatanList = await Kegiatan.find({ _id: { $in: ids } });
+    
+    if (kegiatanList.length === 0) {
+      return res.status(404).json({ message: "No kegiatan found to delete" });
+    }
+    
+    // Delete corresponding jadwal entries for all kegiatan
+    const kegiatanIds = kegiatanList.map(k => k._id);
+    await Jadwal.deleteMany({ kegiatanId: { $in: kegiatanIds } });
+    
+    // Log activity for each deleted kegiatan
+    for (const kegiatan of kegiatanList) {
+      await logActivity(req, {
+        actionType: 'DELETE',
+        entityType: 'KEGIATAN',
+        entityId: kegiatan._id,
+        entityName: kegiatan.namaKegiatan,
+        description: `Bulk deleted kegiatan: ${kegiatan.namaKegiatan}`,
+        details: { 
+          namaKegiatan: kegiatan.namaKegiatan, 
+          tanggalMulai: kegiatan.tanggalMulai,
+          tempat: kegiatan.tempat
+        }
+      });
+    }
+    
+    await Kegiatan.deleteMany({ _id: { $in: ids } });
+    
+    res.json({ 
+      message: `Successfully deleted ${kegiatanList.length} kegiatan`,
+      deletedCount: kegiatanList.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error bulk deleting kegiatan",
+      error: err.message
+    });
+  }
+};

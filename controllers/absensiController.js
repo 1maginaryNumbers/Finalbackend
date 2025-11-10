@@ -287,3 +287,46 @@ exports.deleteAbsensi = async (req, res) => {
     });
   }
 };
+
+exports.bulkDeleteAbsensi = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Array of IDs is required" });
+    }
+    
+    const absensiList = await Absensi.find({ _id: { $in: ids } }).populate('pendaftaran', 'namaLengkap');
+    
+    if (absensiList.length === 0) {
+      return res.status(404).json({ message: "No absensi found to delete" });
+    }
+    
+    // Log activity for each deleted absensi
+    for (const absensi of absensiList) {
+      await logActivity(req, {
+        actionType: 'DELETE',
+        entityType: 'ABSENSI',
+        entityId: absensi._id,
+        entityName: absensi.pendaftaran?.namaLengkap || 'Unknown',
+        description: `Bulk deleted absensi: ${absensi.pendaftaran?.namaLengkap || 'Unknown'}`,
+        details: { 
+          status: absensi.status,
+          tipePerson: absensi.tipePerson
+        }
+      });
+    }
+    
+    await Absensi.deleteMany({ _id: { $in: ids } });
+    
+    res.json({ 
+      message: `Successfully deleted ${absensiList.length} absensi`,
+      deletedCount: absensiList.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error bulk deleting absensi",
+      error: err.message
+    });
+  }
+};

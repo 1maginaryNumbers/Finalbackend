@@ -5,6 +5,7 @@ const authMiddleware = require("../middlewares/auth");
 
 router.post("/", authMiddleware, jadwalController.createJadwal);
 router.get("/", jadwalController.getAllJadwal);
+router.post("/bulk-delete", authMiddleware, jadwalController.bulkDeleteJadwal);
 router.get("/:id", jadwalController.getJadwalById);
 router.put("/:id", authMiddleware, jadwalController.updateJadwal);
 router.delete("/:id", authMiddleware, jadwalController.deleteJadwal);

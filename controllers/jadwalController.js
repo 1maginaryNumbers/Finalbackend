@@ -226,3 +226,56 @@ exports.deleteJadwal = async (req, res) => {
   }
 };
 
+exports.bulkDeleteJadwal = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Array of IDs is required" });
+    }
+    
+    const jadwalList = await Jadwal.find({ _id: { $in: ids } });
+    
+    if (jadwalList.length === 0) {
+      return res.status(404).json({ message: "No jadwal found to delete" });
+    }
+    
+    // Get unique kegiatanIds that need to be deleted
+    const kegiatanIds = [...new Set(jadwalList.filter(j => j.kegiatanId).map(j => j.kegiatanId.toString()))];
+    
+    // Delete kegiatan and all their jadwal entries
+    if (kegiatanIds.length > 0) {
+      await Kegiatan.deleteMany({ _id: { $in: kegiatanIds } });
+      await Jadwal.deleteMany({ kegiatanId: { $in: kegiatanIds } });
+    }
+    
+    // Delete jadwal entries that are not linked to kegiatan
+    const jadwalIdsToDelete = jadwalList.filter(j => !j.kegiatanId).map(j => j._id);
+    if (jadwalIdsToDelete.length > 0) {
+      await Jadwal.deleteMany({ _id: { $in: jadwalIdsToDelete } });
+    }
+    
+    // Log activity for each deleted jadwal
+    for (const jadwal of jadwalList) {
+      await logActivity(req, {
+        actionType: 'DELETE',
+        entityType: 'JADWAL',
+        entityId: jadwal._id,
+        entityName: jadwal.judul,
+        description: `Bulk deleted schedule: ${jadwal.judul}`,
+        details: { judul: jadwal.judul, tanggal: jadwal.tanggal }
+      });
+    }
+    
+    res.json({ 
+      message: `Successfully deleted ${jadwalList.length} jadwal`,
+      deletedCount: jadwalList.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error bulk deleting jadwal",
+      error: err.message
+    });
+  }
+};
+
