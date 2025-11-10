@@ -18,6 +18,12 @@ exports.createPendaftaran = async (req, res) => {
       return res.status(404).json({ message: "Kegiatan not found" });
     }
     
+    if (kegiatanExists.status !== 'sedang_berlangsung') {
+      return res.status(400).json({ 
+        message: "Pendaftaran hanya dapat dilakukan untuk kegiatan dengan status Aktif" 
+      });
+    }
+    
     // Check if user is already registered for this activity
     const existingRegistration = await Pendaftaran.findOne({
       kegiatan: kegiatan,
@@ -87,6 +93,12 @@ exports.daftarKegiatan = async (req, res) => {
     const kegiatanExists = await Kegiatan.findById(kegiatanId);
     if (!kegiatanExists) {
       return res.status(404).json({ message: "Kegiatan not found" });
+    }
+    
+    if (kegiatanExists.status !== 'sedang_berlangsung') {
+      return res.status(400).json({ 
+        message: "Pendaftaran hanya dapat dilakukan untuk kegiatan dengan status Aktif" 
+      });
     }
     
     const results = [];
