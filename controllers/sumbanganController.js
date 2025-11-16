@@ -23,9 +23,9 @@ exports.createSumbangan = async (req, res) => {
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else {
       console.log('No QRIS image uploaded, generating automatically...');
-      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
-      generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent, expirationDate);
+      generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent, expirationDate, true);
       if (generatedQR) {
         qrisImage = generatedQR.image;
         qrisString = generatedQR.string;
@@ -238,9 +238,9 @@ exports.updateSumbangan = async (req, res) => {
       sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else if (regenerateQR === 'true' || regenerateQR === true) {
       console.log('Regenerating QRIS for donation event:', sumbangan._id);
-      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate);
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate, true);
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
@@ -251,9 +251,9 @@ exports.updateSumbangan = async (req, res) => {
       }
     } else if (!sumbangan.qrisImage && !req.file) {
       console.log('No QRIS image exists, generating automatically during update...');
-      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate);
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate, true);
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
@@ -406,7 +406,7 @@ const getMidtransCoreApi = () => {
   });
 };
 
-const generateQRCode = async (orderId, amount, eventName, expirationDate) => {
+const generateQRCode = async (orderId, amount, eventName, expirationDate, isReusable = false) => {
   try {
     if (!process.env.MIDTRANS_SERVER_KEY) {
       console.error('MIDTRANS_SERVER_KEY is not set');
@@ -444,8 +444,14 @@ const generateQRCode = async (orderId, amount, eventName, expirationDate) => {
         console.log('Setting QRIS expiration:', expiryMinutes, 'minutes from now');
       }
     }
+
+    if (isReusable) {
+      parameter.qris = {
+        acquirer: 'gopay'
+      };
+    }
     
-    console.log('Attempting to generate QRIS with orderId:', orderId, 'amount:', amount);
+    console.log('Attempting to generate QRIS with orderId:', orderId, 'amount:', amount, 'isReusable:', isReusable);
     const chargeResponse = await coreApi.charge(parameter);
     console.log('Midtrans charge response:', JSON.stringify(chargeResponse, null, 2));
     
@@ -516,6 +522,7 @@ exports.createPayment = async (req, res) => {
     await transaksi.save();
     
     const snap = getMidtransSnap();
+    const expirationDate = sumbanganExists.qrisExpirationDate || sumbanganExists.tanggalSelesai;
     
     const parameter = {
       transaction_details: {
@@ -536,6 +543,19 @@ exports.createPayment = async (req, res) => {
         }
       ]
     };
+
+    if (expirationDate) {
+      const expiryTime = new Date(expirationDate);
+      expiryTime.setHours(23, 59, 59, 999);
+      const expiryMinutes = Math.floor((expiryTime.getTime() - Date.now()) / (1000 * 60));
+      
+      if (expiryMinutes > 0) {
+        parameter.custom_expiry = {
+          expiry_duration: expiryMinutes,
+          unit: 'minute'
+        };
+      }
+    }
     
     const transaction = await snap.createTransaction(parameter);
     
@@ -638,6 +658,143 @@ exports.handleWebhook = async (req, res) => {
     console.error('Error processing webhook:', err);
     res.status(500).json({
       message: "Error processing webhook",
+      error: err.message
+    });
+  }
+};
+
+exports.syncTransactionStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const transaksi = await Transaksi.findById(id);
+    if (!transaksi) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+    
+    if (!transaksi.midtransOrderId) {
+      return res.status(400).json({ message: "Transaction does not have Midtrans order ID" });
+    }
+    
+    const coreApi = getMidtransCoreApi();
+    const statusResponse = await coreApi.transaction.status(transaksi.midtransOrderId);
+    
+    const transactionStatus = statusResponse.transaction_status;
+    
+    transaksi.midtransTransactionStatus = transactionStatus;
+    transaksi.midtransTransactionId = statusResponse.transaction_id;
+    transaksi.midtransPaymentType = statusResponse.payment_type;
+    
+    if (statusResponse.va_numbers && statusResponse.va_numbers.length > 0) {
+      transaksi.midtransVaNumber = statusResponse.va_numbers[0].va_number;
+      transaksi.midtransBank = statusResponse.va_numbers[0].bank;
+    }
+    
+    let newStatus = 'pending';
+    if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
+      newStatus = 'berhasil';
+    } else if (transactionStatus === 'deny' || transactionStatus === 'cancel' || transactionStatus === 'expire') {
+      newStatus = 'gagal';
+    } else if (transactionStatus === 'pending') {
+      newStatus = 'pending';
+    }
+    
+    const oldStatus = transaksi.status;
+    transaksi.status = newStatus;
+    await transaksi.save();
+    
+    if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
+      const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
+      if (sumbangan) {
+        sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
+        await sumbangan.save();
+      }
+    }
+    
+    res.json({
+      message: "Transaction status synced successfully",
+      transaksi,
+      midtransStatus: statusResponse
+    });
+  } catch (err) {
+    console.error('Error syncing transaction status:', err);
+    res.status(500).json({
+      message: "Error syncing transaction status",
+      error: err.message
+    });
+  }
+};
+
+exports.syncAllPendingTransactions = async (req, res) => {
+  try {
+    const pendingTransactions = await Transaksi.find({
+      paymentGateway: 'midtrans',
+      status: 'pending',
+      midtransOrderId: { $exists: true, $ne: null }
+    });
+    
+    const coreApi = getMidtransCoreApi();
+    const results = [];
+    
+    for (const transaksi of pendingTransactions) {
+      try {
+        const statusResponse = await coreApi.transaction.status(transaksi.midtransOrderId);
+        const transactionStatus = statusResponse.transaction_status;
+        
+        transaksi.midtransTransactionStatus = transactionStatus;
+        transaksi.midtransTransactionId = statusResponse.transaction_id;
+        transaksi.midtransPaymentType = statusResponse.payment_type;
+        
+        if (statusResponse.va_numbers && statusResponse.va_numbers.length > 0) {
+          transaksi.midtransVaNumber = statusResponse.va_numbers[0].va_number;
+          transaksi.midtransBank = statusResponse.va_numbers[0].bank;
+        }
+        
+        let newStatus = 'pending';
+        if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
+          newStatus = 'berhasil';
+        } else if (transactionStatus === 'deny' || transactionStatus === 'cancel' || transactionStatus === 'expire') {
+          newStatus = 'gagal';
+        }
+        
+        const oldStatus = transaksi.status;
+        transaksi.status = newStatus;
+        await transaksi.save();
+        
+        if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
+          const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
+          if (sumbangan) {
+            sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
+            await sumbangan.save();
+          }
+        }
+        
+        results.push({
+          transaksiId: transaksi._id,
+          orderId: transaksi.midtransOrderId,
+          oldStatus,
+          newStatus,
+          synced: true
+        });
+      } catch (err) {
+        console.error(`Error syncing transaction ${transaksi._id}:`, err);
+        results.push({
+          transaksiId: transaksi._id,
+          orderId: transaksi.midtransOrderId,
+          synced: false,
+          error: err.message
+        });
+      }
+    }
+    
+    res.json({
+      message: `Synced ${results.filter(r => r.synced).length} of ${results.length} transactions`,
+      results
+    });
+  } catch (err) {
+    console.error('Error syncing all transactions:', err);
+    res.status(500).json({
+      message: "Error syncing transactions",
       error: err.message
     });
   }

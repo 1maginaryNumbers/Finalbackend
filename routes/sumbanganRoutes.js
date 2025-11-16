@@ -10,6 +10,8 @@ router.post("/payment", sumbanganController.createPayment);
 router.post("/webhook", sumbanganController.handleWebhook);
 router.get("/transaksi", sumbanganController.getAllTransaksi);
 router.put("/transaksi/:id/status", sumbanganController.updateTransaksiStatus);
+router.get("/transaksi/:id/sync", sumbanganController.syncTransactionStatus);
+router.post("/transaksi/sync-all", sumbanganController.syncAllPendingTransactions);
 router.get("/:id/qris-image", sumbanganController.getQRISImage);
 router.get("/:id/qris-string", sumbanganController.getQRISString);
 router.get("/:id", sumbanganController.getSumbanganById);
