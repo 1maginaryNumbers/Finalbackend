@@ -7,7 +7,6 @@ router.post("/", upload.single('qrisImage'), handleMulterError, sumbanganControl
 router.get("/", sumbanganController.getAllSumbangan);
 router.post("/transaksi", sumbanganController.createTransaksi);
 router.post("/payment", sumbanganController.createPayment);
-router.get("/generate-qris", sumbanganController.generateReusableQRIS);
 router.post("/webhook", sumbanganController.handleWebhook);
 router.get("/transaksi", sumbanganController.getAllTransaksi);
 router.put("/transaksi/:id/status", sumbanganController.updateTransaksiStatus);
