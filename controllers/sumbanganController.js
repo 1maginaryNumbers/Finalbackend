@@ -165,6 +165,8 @@ exports.getQRISImage = async (req, res) => {
       
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Content-Disposition', `inline; filename="qris-${sumbangan._id}.png"`);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(imageBuffer);
     } else {
       res.redirect(sumbangan.qrisImage);
