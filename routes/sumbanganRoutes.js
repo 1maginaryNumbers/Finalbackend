@@ -6,6 +6,8 @@ const { upload, handleMulterError } = require("../middlewares/upload");
 router.post("/", upload.single('qrisImage'), handleMulterError, sumbanganController.createSumbangan);
 router.get("/", sumbanganController.getAllSumbangan);
 router.post("/transaksi", sumbanganController.createTransaksi);
+router.post("/payment", sumbanganController.createPayment);
+router.post("/webhook", sumbanganController.handleWebhook);
 router.get("/transaksi", sumbanganController.getAllTransaksi);
 router.put("/transaksi/:id/status", sumbanganController.updateTransaksiStatus);
 router.get("/:id", sumbanganController.getSumbanganById);

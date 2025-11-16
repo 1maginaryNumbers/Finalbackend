@@ -1,6 +1,7 @@
 const Sumbangan = require("../models/sumbangan");
 const { logActivity } = require("../utils/activityLogger");
 const Transaksi = require("../models/transaksi");
+const midtransClient = require("midtrans-client");
 
 exports.createSumbangan = async (req, res) => {
   try {
@@ -244,6 +245,14 @@ exports.updateTransaksiStatus = async (req, res) => {
     
     await transaksi.save();
     
+    if (status === 'berhasil' || status === 'settlement') {
+      const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
+      if (sumbangan) {
+        sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
+        await sumbangan.save();
+      }
+    }
+    
     res.json({
       message: "Transaksi status updated successfully",
       transaksi
@@ -251,6 +260,176 @@ exports.updateTransaksiStatus = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Error updating transaksi status",
+      error: err.message
+    });
+  }
+};
+
+const getMidtransSnap = () => {
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+  return new midtransClient.Snap({
+    isProduction: isProduction,
+    serverKey: process.env.MIDTRANS_SERVER_KEY,
+    clientKey: process.env.MIDTRANS_CLIENT_KEY
+  });
+};
+
+exports.createPayment = async (req, res) => {
+  try {
+    const { sumbangan, namaDonatur, email, nomorTelepon, nominal } = req.body;
+    
+    if (!sumbangan || !namaDonatur || !nominal) {
+      return res.status(400).json({ message: "Sumbangan, nama donatur, and nominal are required" });
+    }
+    
+    const sumbanganExists = await Sumbangan.findById(sumbangan);
+    if (!sumbanganExists) {
+      return res.status(404).json({ message: "Sumbangan not found" });
+    }
+    
+    if (sumbanganExists.status !== 'aktif') {
+      return res.status(400).json({ message: "Donation event is not active" });
+    }
+    
+    const orderId = `DONATION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const transaksi = new Transaksi({
+      sumbangan,
+      namaDonatur,
+      email,
+      nomorTelepon,
+      nominal: parseFloat(nominal),
+      metodePembayaran: 'midtrans',
+      status: 'pending',
+      paymentGateway: 'midtrans',
+      midtransOrderId: orderId
+    });
+    
+    await transaksi.save();
+    
+    const snap = getMidtransSnap();
+    
+    const parameter = {
+      transaction_details: {
+        order_id: orderId,
+        gross_amount: parseFloat(nominal)
+      },
+      customer_details: {
+        first_name: namaDonatur,
+        email: email || '',
+        phone: nomorTelepon || ''
+      },
+      item_details: [
+        {
+          id: sumbangan._id.toString(),
+          price: parseFloat(nominal),
+          quantity: 1,
+          name: `Donasi - ${sumbanganExists.namaEvent}`
+        }
+      ]
+    };
+    
+    const transaction = await snap.createTransaction(parameter);
+    
+    transaksi.midtransTransactionId = transaction.token;
+    await transaksi.save();
+    
+    res.json({
+      message: "Payment created successfully",
+      token: transaction.token,
+      redirect_url: transaction.redirect_url,
+      transaksi: transaksi
+    });
+  } catch (err) {
+    console.error('Error creating payment:', err);
+    res.status(500).json({
+      message: "Error creating payment",
+      error: err.message
+    });
+  }
+};
+
+exports.handleWebhook = async (req, res) => {
+  try {
+    const notificationJson = req.body;
+    
+    const snap = getMidtransSnap();
+    const statusResponse = await snap.transaction.notification(notificationJson);
+    
+    const orderId = statusResponse.order_id;
+    const transactionStatus = statusResponse.transaction_status;
+    const fraudStatus = statusResponse.fraud_status;
+    
+    if (transactionStatus === 'capture') {
+      if (fraudStatus === 'challenge') {
+        console.log(`Transaction ${orderId} is challenged by FDS`);
+      } else if (fraudStatus === 'accept') {
+        console.log(`Transaction ${orderId} successfully captured`);
+      }
+    } else if (transactionStatus === 'settlement') {
+      console.log(`Transaction ${orderId} successfully settled`);
+    } else if (transactionStatus === 'deny') {
+      console.log(`Transaction ${orderId} denied by FDS`);
+    } else if (transactionStatus === 'cancel' || transactionStatus === 'expire') {
+      console.log(`Transaction ${orderId} cancelled or expired`);
+    } else if (transactionStatus === 'pending') {
+      console.log(`Transaction ${orderId} is pending`);
+    }
+    
+    const transaksi = await Transaksi.findOne({ midtransOrderId: orderId });
+    
+    if (!transaksi) {
+      return res.status(404).json({ message: "Transaksi not found" });
+    }
+    
+    transaksi.midtransTransactionStatus = transactionStatus;
+    transaksi.midtransTransactionId = statusResponse.transaction_id;
+    transaksi.midtransPaymentType = statusResponse.payment_type;
+    
+    if (statusResponse.va_numbers && statusResponse.va_numbers.length > 0) {
+      transaksi.midtransVaNumber = statusResponse.va_numbers[0].va_number;
+      transaksi.midtransBank = statusResponse.va_numbers[0].bank;
+    }
+    
+    let newStatus = 'pending';
+    if (transactionStatus === 'settlement' || transactionStatus === 'capture') {
+      newStatus = 'berhasil';
+    } else if (transactionStatus === 'deny' || transactionStatus === 'cancel' || transactionStatus === 'expire') {
+      newStatus = 'gagal';
+    } else if (transactionStatus === 'pending') {
+      newStatus = 'pending';
+    }
+    
+    const oldStatus = transaksi.status;
+    transaksi.status = newStatus;
+    await transaksi.save();
+    
+    if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
+      const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
+      if (sumbangan) {
+        sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
+        await sumbangan.save();
+      }
+    }
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: transaksi.namaDonatur,
+      description: `Payment webhook received: ${transactionStatus}`,
+      details: {
+        orderId: orderId,
+        transactionStatus: transactionStatus,
+        paymentType: statusResponse.payment_type
+      }
+    });
+    
+    res.status(200).json({ message: "Webhook processed successfully" });
+  } catch (err) {
+    console.error('Error processing webhook:', err);
+    res.status(500).json({
+      message: "Error processing webhook",
       error: err.message
     });
   }
