@@ -632,7 +632,6 @@ exports.createPayment = async (req, res) => {
 
 exports.handleWebhook = async (req, res) => {
   try {
-    console.log('Webhook received:', JSON.stringify(req.body, null, 2));
     const notificationJson = req.body;
     
     const snap = getMidtransSnap();
@@ -641,16 +640,6 @@ exports.handleWebhook = async (req, res) => {
     const orderId = statusResponse.order_id;
     const transactionStatus = statusResponse.transaction_status;
     const fraudStatus = statusResponse.fraud_status;
-    
-    console.log(`Processing webhook for orderId: ${orderId}, status: ${transactionStatus}`);
-    
-    if (orderId && orderId.startsWith('QRIS-TEMPLATE-')) {
-      console.log(`Template QRIS transaction ${orderId} - ignoring webhook`);
-      return res.status(200).json({ 
-        message: "Template QRIS transaction - webhook acknowledged",
-        orderId: orderId
-      });
-    }
     
     if (transactionStatus === 'capture') {
       if (fraudStatus === 'challenge') {
@@ -671,11 +660,7 @@ exports.handleWebhook = async (req, res) => {
     const transaksi = await Transaksi.findOne({ midtransOrderId: orderId });
     
     if (!transaksi) {
-      console.log(`Transaction not found for orderId: ${orderId} - returning 200 to acknowledge webhook`);
-      return res.status(200).json({ 
-        message: "Transaction not found but webhook acknowledged",
-        orderId: orderId
-      });
+      return res.status(404).json({ message: "Transaksi not found" });
     }
     
     transaksi.midtransTransactionStatus = transactionStatus;
@@ -721,13 +706,11 @@ exports.handleWebhook = async (req, res) => {
       }
     });
     
-    console.log(`Webhook processed successfully for orderId: ${orderId}`);
     res.status(200).json({ message: "Webhook processed successfully" });
   } catch (err) {
     console.error('Error processing webhook:', err);
-    console.error('Error stack:', err.stack);
-    res.status(200).json({
-      message: "Webhook received but processing failed",
+    res.status(500).json({
+      message: "Error processing webhook",
       error: err.message
     });
   }

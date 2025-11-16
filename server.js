@@ -36,11 +36,37 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 app.use((req, res, next) => {
+<<<<<<< HEAD
   if (req.path === '/api/sumbangan/webhook') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
+=======
+  const allowedOrigins = [
+    'https://bdcadmin.vercel.app',
+    'https://bdctemple.vercel.app',
+    'https://viharabdc.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002'
+  ];
+  
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+  
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+>>>>>>> parent of 8253739 (Improve webhook handling and CORS for sumbangan)
   next();
 });
 
