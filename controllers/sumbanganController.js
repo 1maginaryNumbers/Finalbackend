@@ -22,7 +22,20 @@ exports.createSumbangan = async (req, res) => {
       const mimetype = req.file.mimetype || 'image/jpeg';
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else {
-      console.log('No QRIS image uploaded - QRIS will be generated dynamically on request');
+      console.log('Generating static QRIS for donation event...');
+      const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
+      const orderId = `STATIC-QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const amount = parseFloat(targetDana);
+      
+      generatedQR = await generateQRCode(orderId, amount, namaEvent, expirationDate, true);
+      
+      if (generatedQR) {
+        qrisImage = generatedQR.image;
+        qrisString = generatedQR.string;
+        console.log('Static QRIS generated and stored successfully');
+      } else {
+        console.log('Failed to generate QRIS, will be generated on request');
+      }
     }
     
     const sumbangan = new Sumbangan({
@@ -148,80 +161,40 @@ exports.getQRISImage = async (req, res) => {
       });
     }
 
-    const orderId = `DONATION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const amount = sumbangan.targetDana;
-    const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
-    
-    const transaksi = new Transaksi({
-      sumbangan: sumbangan._id,
-      namaDonatur: 'Anonymous',
-      nominal: amount,
-      metodePembayaran: 'midtrans',
-      status: 'pending',
-      paymentGateway: 'midtrans',
-      midtransOrderId: orderId
-    });
-    
-    await transaksi.save();
-    
-    const coreApi = getMidtransCoreApi();
-    const parameter = {
-      payment_type: 'qris',
-      transaction_details: {
-        order_id: orderId,
-        gross_amount: amount
-      },
-      item_details: [
-        {
-          id: sumbangan._id.toString(),
-          price: amount,
-          quantity: 1,
-          name: `Donasi - ${sumbangan.namaEvent}`
-        }
-      ]
-    };
-
-    if (expirationDate) {
-      const expiryTime = new Date(expirationDate);
-      expiryTime.setHours(23, 59, 59, 999);
-      const expiryMinutes = Math.floor((expiryTime.getTime() - Date.now()) / (1000 * 60));
+    if (sumbangan.qrisImage) {
+      const base64Data = sumbangan.qrisImage.split(',')[1];
+      const mimeType = sumbangan.qrisImage.match(/data:([^;]+)/)?.[1] || 'image/png';
+      const imageBuffer = Buffer.from(base64Data, 'base64');
       
-      if (expiryMinutes > 0) {
-        parameter.custom_expiry = {
-          expiry_duration: expiryMinutes,
-          unit: 'minute'
-        };
-      }
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="qris-${sumbangan._id}.png"`);
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.send(imageBuffer);
+      return;
     }
+
+    const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
+    const orderId = `STATIC-QRIS-${sumbangan._id}-${Date.now()}`;
+    const amount = sumbangan.targetDana;
     
-    const chargeResponse = await coreApi.charge(parameter);
+    const generatedQR = await generateQRCode(orderId, amount, sumbangan.namaEvent, expirationDate, true);
     
-    if (chargeResponse.status_code === '201' && chargeResponse.qr_string) {
-      transaksi.midtransTransactionId = chargeResponse.transaction_id;
-      transaksi.midtransTransactionStatus = chargeResponse.transaction_status;
-      await transaksi.save();
+    if (generatedQR) {
+      sumbangan.qrisImage = generatedQR.image;
+      sumbangan.qrisString = generatedQR.string;
+      await sumbangan.save();
       
-      const qrString = chargeResponse.qr_string;
-      const qrCodeImage = await QRCode.toDataURL(qrString, {
-        errorCorrectionLevel: 'M',
-        type: 'image/png',
-        width: 300,
-        margin: 2
-      });
-      
-      const base64Data = qrCodeImage.split(',')[1];
+      const base64Data = generatedQR.image.split(',')[1];
       const imageBuffer = Buffer.from(base64Data, 'base64');
       
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Content-Disposition', `inline; filename="qris-${sumbangan._id}.png"`);
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
+      res.setHeader('Cache-Control', 'public, max-age=31536000');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(imageBuffer);
     } else {
-      await Transaksi.findByIdAndDelete(transaksi._id);
-      throw new Error('Failed to generate QRIS: ' + JSON.stringify(chargeResponse));
+      throw new Error('Failed to generate QRIS');
     }
   } catch (err) {
     console.error('Error generating QRIS image:', err);
