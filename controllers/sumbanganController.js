@@ -24,10 +24,10 @@ exports.createSumbangan = async (req, res) => {
     } else {
       console.log('Generating static QRIS for donation event...');
       const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
-      const orderId = `STATIC-QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const orderId = `STATIC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const amount = parseFloat(targetDana);
       
-      generatedQR = await generateQRCode(orderId, amount, namaEvent, expirationDate, true);
+      generatedQR = await generateQRCode(orderId, amount, namaEvent, expirationDate, false);
       
       if (generatedQR) {
         qrisImage = generatedQR.image;
@@ -175,10 +175,10 @@ exports.getQRISImage = async (req, res) => {
     }
 
     const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
-    const orderId = `STATIC-QRIS-${sumbangan._id}-${Date.now()}`;
+    const orderId = `STATIC-${sumbangan._id}-${Date.now()}`;
     const amount = sumbangan.targetDana;
     
-    const generatedQR = await generateQRCode(orderId, amount, sumbangan.namaEvent, expirationDate, true);
+    const generatedQR = await generateQRCode(orderId, amount, sumbangan.namaEvent, expirationDate, false);
     
     if (generatedQR) {
       sumbangan.qrisImage = generatedQR.image;
