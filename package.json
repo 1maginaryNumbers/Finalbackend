@@ -19,6 +19,7 @@
     "mongoose": "^8.18.0",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
+    "nodemailer": "^6.9.8",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
