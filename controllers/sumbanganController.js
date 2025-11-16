@@ -5,10 +5,10 @@ const midtransClient = require("midtrans-client");
 
 exports.createSumbangan = async (req, res) => {
   try {
-    const { namaEvent, deskripsi, bankName, bankNumber, targetDana, tanggalSelesai } = req.body;
+    const { namaEvent, deskripsi, targetDana, tanggalSelesai } = req.body;
     
-    if (!namaEvent || !targetDana || !bankName || !bankNumber) {
-      return res.status(400).json({ message: "Nama event, target dana, bank name, and bank number are required" });
+    if (!namaEvent || !targetDana) {
+      return res.status(400).json({ message: "Nama event and target dana are required" });
     }
     
     let qrisImage = '';
@@ -23,8 +23,6 @@ exports.createSumbangan = async (req, res) => {
     const sumbangan = new Sumbangan({
       namaEvent,
       deskripsi,
-      bankName,
-      bankNumber,
       qrisImage,
       targetDana,
       tanggalSelesai
@@ -40,8 +38,7 @@ exports.createSumbangan = async (req, res) => {
       description: `Created new donation event: ${sumbangan.namaEvent}`,
       details: { 
         namaEvent: sumbangan.namaEvent, 
-        targetDana: sumbangan.targetDana,
-        bankName: sumbangan.bankName
+        targetDana: sumbangan.targetDana
       }
     });
     
@@ -126,7 +123,7 @@ exports.getSumbanganById = async (req, res) => {
 
 exports.updateSumbangan = async (req, res) => {
   try {
-    const { namaEvent, deskripsi, bankName, bankNumber, targetDana, danaTerkumpul, status, tanggalSelesai } = req.body;
+    const { namaEvent, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai } = req.body;
     
     const sumbangan = await Sumbangan.findById(req.params.id);
     
@@ -136,8 +133,6 @@ exports.updateSumbangan = async (req, res) => {
     
     if (namaEvent) sumbangan.namaEvent = namaEvent;
     if (deskripsi !== undefined) sumbangan.deskripsi = deskripsi;
-    if (bankName) sumbangan.bankName = bankName;
-    if (bankNumber) sumbangan.bankNumber = bankNumber;
     if (targetDana) sumbangan.targetDana = targetDana;
     if (danaTerkumpul !== undefined) sumbangan.danaTerkumpul = danaTerkumpul;
     if (status) sumbangan.status = status;
