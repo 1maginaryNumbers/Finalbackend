@@ -22,17 +22,7 @@ exports.createSumbangan = async (req, res) => {
       const mimetype = req.file.mimetype || 'image/jpeg';
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else {
-      console.log('No QRIS image uploaded, generating automatically...');
-      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
-      generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent, expirationDate, true);
-      if (generatedQR) {
-        qrisImage = generatedQR.image;
-        qrisString = generatedQR.string;
-        console.log('QRIS generated and saved successfully');
-      } else {
-        console.warn('QRIS generation failed, creating donation event without QRIS');
-      }
+      console.log('No QRIS image uploaded - QRIS will be generated dynamically on request');
     }
     
     const sumbangan = new Sumbangan({
@@ -147,33 +137,96 @@ exports.getQRISImage = async (req, res) => {
       return res.status(404).json({ message: "Sumbangan not found" });
     }
     
-    if (!sumbangan.qrisImage) {
-      return res.status(404).json({ message: "QRIS image not found" });
+    if (sumbangan.status !== 'aktif') {
+      return res.status(400).json({ message: "Donation event is not active" });
     }
-
+    
     if (sumbangan.qrisExpirationDate && new Date(sumbangan.qrisExpirationDate) < new Date()) {
       return res.status(410).json({ 
         message: "QRIS has expired",
         expiredDate: sumbangan.qrisExpirationDate
       });
     }
+
+    const orderId = `DONATION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const amount = sumbangan.targetDana;
+    const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
     
-    if (sumbangan.qrisImage.startsWith('data:')) {
-      const base64Data = sumbangan.qrisImage.split(',')[1];
-      const mimeType = sumbangan.qrisImage.match(/data:([^;]+)/)?.[1] || 'image/png';
+    const transaksi = new Transaksi({
+      sumbangan: sumbangan._id,
+      namaDonatur: 'Anonymous',
+      nominal: amount,
+      metodePembayaran: 'midtrans',
+      status: 'pending',
+      paymentGateway: 'midtrans',
+      midtransOrderId: orderId
+    });
+    
+    await transaksi.save();
+    
+    const coreApi = getMidtransCoreApi();
+    const parameter = {
+      payment_type: 'qris',
+      transaction_details: {
+        order_id: orderId,
+        gross_amount: amount
+      },
+      item_details: [
+        {
+          id: sumbangan._id.toString(),
+          price: amount,
+          quantity: 1,
+          name: `Donasi - ${sumbangan.namaEvent}`
+        }
+      ]
+    };
+
+    if (expirationDate) {
+      const expiryTime = new Date(expirationDate);
+      expiryTime.setHours(23, 59, 59, 999);
+      const expiryMinutes = Math.floor((expiryTime.getTime() - Date.now()) / (1000 * 60));
+      
+      if (expiryMinutes > 0) {
+        parameter.custom_expiry = {
+          expiry_duration: expiryMinutes,
+          unit: 'minute'
+        };
+      }
+    }
+    
+    const chargeResponse = await coreApi.charge(parameter);
+    
+    if (chargeResponse.status_code === '201' && chargeResponse.qr_string) {
+      transaksi.midtransTransactionId = chargeResponse.transaction_id;
+      transaksi.midtransTransactionStatus = chargeResponse.transaction_status;
+      await transaksi.save();
+      
+      const qrString = chargeResponse.qr_string;
+      const qrCodeImage = await QRCode.toDataURL(qrString, {
+        errorCorrectionLevel: 'M',
+        type: 'image/png',
+        width: 300,
+        margin: 2
+      });
+      
+      const base64Data = qrCodeImage.split(',')[1];
       const imageBuffer = Buffer.from(base64Data, 'base64');
       
-      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Type', 'image/png');
       res.setHeader('Content-Disposition', `inline; filename="qris-${sumbangan._id}.png"`);
-      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.send(imageBuffer);
     } else {
-      res.redirect(sumbangan.qrisImage);
+      await Transaksi.findByIdAndDelete(transaksi._id);
+      throw new Error('Failed to generate QRIS: ' + JSON.stringify(chargeResponse));
     }
   } catch (err) {
+    console.error('Error generating QRIS image:', err);
     res.status(500).json({
-      message: "Error fetching QRIS image",
+      message: "Error generating QRIS image",
       error: err.message
     });
   }

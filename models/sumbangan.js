@@ -8,6 +8,7 @@ const sumbanganSchema = new mongoose.Schema({
   qrisImage: { type: String },
   qrisString: { type: String },
   qrisExpirationDate: { type: Date },
+  qrisPaymentLink: { type: String },
   targetDana: { type: Number, required: true },
   danaTerkumpul: { type: Number, default: 0 },
   status: { type: String, enum: ['aktif', 'selesai', 'ditutup'], default: 'aktif' },
