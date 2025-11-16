@@ -140,7 +140,7 @@ exports.sendBroadcast = async (req, res) => {
     for (const email of emailList) {
       try {
         const mailOptions = {
-          from: `"Vihara Management" <${fromEmail}>`,
+          from: `"Vihara BDC" <${fromEmail}>`,
           to: email,
           subject: subject,
           text: message,
@@ -151,7 +151,7 @@ exports.sendBroadcast = async (req, res) => {
               </h2>
               <div style="margin-top: 20px; white-space: pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>
               <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 12px;">
-                <p>This is an automated message from Vihara Management System.</p>
+                <p>This is an automated message from Vihara BDC System.</p>
               </div>
             </div>
           </div>`
