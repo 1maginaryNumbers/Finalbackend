@@ -662,6 +662,23 @@ exports.handleWebhook = async (req, res) => {
       const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
       if (sumbangan) {
         sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
+        
+        if (sumbangan.status === 'aktif' && sumbangan.qrisImage && orderId.startsWith('STATIC-')) {
+          const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
+          if (!expirationDate || new Date(expirationDate) > new Date()) {
+            console.log('Regenerating QRIS after successful payment for reusable QRIS...');
+            const newOrderId = `STATIC-${sumbangan._id}-${Date.now()}`;
+            const amount = sumbangan.targetDana;
+            
+            const newQR = await generateQRCode(newOrderId, amount, sumbangan.namaEvent, expirationDate, false);
+            if (newQR) {
+              sumbangan.qrisImage = newQR.image;
+              sumbangan.qrisString = newQR.string;
+              console.log('New QRIS generated and stored for next payment');
+            }
+          }
+        }
+        
         await sumbangan.save();
       }
     }
