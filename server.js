@@ -31,10 +31,33 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
   
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(200).send('');
   }
   
   next();
+});
+
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'https://bdcadmin.vercel.app',
+    'https://bdctemple.vercel.app',
+    'https://viharabdc.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002'
+  ];
+  
+  if (req.path === '/api/sumbangan/webhook') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
+  res.status(200).send('');
 });
 
 app.use(express.json());
