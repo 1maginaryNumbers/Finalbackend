@@ -63,6 +63,7 @@ app.use("/api/struktur", require("./routes/strukturRoutes"));
 app.use("/api/activitylog", require("./routes/activityLogRoutes"));
 app.use("/api/jadwal", require("./routes/jadwalRoutes"));
 app.use("/api/kategori-jadwal", require("./routes/kategoriJadwalRoutes"));
+app.use("/api/kategori-galeri", require("./routes/kategoriGaleriRoutes"));
 
 app.use((req, res, next) => {
   console.log('Request from origin:', req.headers.origin);

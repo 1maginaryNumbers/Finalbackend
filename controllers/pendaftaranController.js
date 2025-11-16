@@ -587,12 +587,23 @@ const sendQRCodeEmailToPendaftaran = async (pendaftaran, req = null) => {
                   <td style="padding: 8px 0; color: #333;">${kegiatan.namaKegiatan || pendaftaran.namaKegiatan}</td>
                 </tr>
                 <tr>
-                  <td style="padding: 8px 0; color: #666;"><strong>Tanggal Daftar:</strong></td>
-                  <td style="padding: 8px 0; color: #333;">${new Date(pendaftaran.tanggalDaftar).toLocaleDateString('id-ID', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}</td>
+                  <td style="padding: 8px 0; color: #666;"><strong>Tanggal Kegiatan:</strong></td>
+                  <td style="padding: 8px 0; color: #333;">${(() => {
+                    if (kegiatan.tanggalMulai && kegiatan.tanggalSelesai) {
+                      const startDate = new Date(kegiatan.tanggalMulai).toLocaleDateString('id-ID', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      });
+                      const endDate = new Date(kegiatan.tanggalSelesai).toLocaleDateString('id-ID', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      });
+                      return startDate === endDate ? startDate : `${startDate} - ${endDate}`;
+                    }
+                    return '-';
+                  })()}</td>
                 </tr>
                 <tr>
                   <td style="padding: 8px 0; color: #666;"><strong>Tipe:</strong></td>
