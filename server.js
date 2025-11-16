@@ -8,37 +8,39 @@ const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
+const allowedOrigins = [
+  'https://bdcadmin.vercel.app',
+  'https://viharabdc.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002'
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+
 app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://bdcadmin.vercel.app',
-    'https://bdctemple.vercel.app',
-    'https://viharabdc.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002'
-  ];
-  
-  const origin = req.headers.origin;
-  
   if (req.path === '/api/sumbangan/webhook') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (origin) {
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   }
-  
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
-  res.setHeader('Access-Control-Max-Age', '86400');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).json({});
-  }
-  
   next();
 });
 
@@ -86,28 +88,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  const allowedOrigins = [
-    'https://bdcadmin.vercel.app',
-    'https://bdctemple.vercel.app',
-    'https://viharabdc.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002'
-  ];
-  
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  } else if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
-  res.status(200).end();
-});
 
 module.exports = app;
 
