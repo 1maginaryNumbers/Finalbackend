@@ -20,10 +20,14 @@ exports.createSumbangan = async (req, res) => {
       const mimetype = req.file.mimetype || 'image/jpeg';
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else {
+      console.log('No QRIS image uploaded, generating automatically...');
       const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent);
       if (generatedQR) {
         qrisImage = generatedQR;
+        console.log('QRIS generated and saved successfully');
+      } else {
+        console.warn('QRIS generation failed, creating donation event without QRIS');
       }
     }
     
@@ -152,10 +156,22 @@ exports.updateSumbangan = async (req, res) => {
       const mimetype = req.file.mimetype || 'image/jpeg';
       sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else if (regenerateQR === 'true' || regenerateQR === true) {
+      console.log('Regenerating QRIS for donation event:', sumbangan._id);
       const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent);
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR;
+        console.log('QRIS regenerated successfully');
+      } else {
+        console.warn('QRIS regeneration failed');
+      }
+    } else if (!sumbangan.qrisImage && !req.file) {
+      console.log('No QRIS image exists, generating automatically during update...');
+      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent);
+      if (generatedQR) {
+        sumbangan.qrisImage = generatedQR;
+        console.log('QRIS generated during update');
       }
     }
     
@@ -301,6 +317,11 @@ const getMidtransCoreApi = () => {
 
 const generateQRCode = async (orderId, amount, eventName) => {
   try {
+    if (!process.env.MIDTRANS_SERVER_KEY) {
+      console.error('MIDTRANS_SERVER_KEY is not set');
+      return null;
+    }
+
     const coreApi = getMidtransCoreApi();
     
     const parameter = {
@@ -319,10 +340,13 @@ const generateQRCode = async (orderId, amount, eventName) => {
       ]
     };
     
+    console.log('Attempting to generate QRIS with orderId:', orderId, 'amount:', amount);
     const chargeResponse = await coreApi.charge(parameter);
+    console.log('Midtrans charge response:', JSON.stringify(chargeResponse, null, 2));
     
     if (chargeResponse.status_code === '201' && chargeResponse.qr_string) {
       const qrString = chargeResponse.qr_string;
+      console.log('QRIS string received, generating QR code image...');
       
       const qrCodeImage = await QRCode.toDataURL(qrString, {
         errorCorrectionLevel: 'M',
@@ -331,12 +355,18 @@ const generateQRCode = async (orderId, amount, eventName) => {
         margin: 2
       });
       
+      console.log('QRIS image generated successfully');
       return qrCodeImage;
+    } else {
+      console.error('Midtrans charge failed or no QR string:', chargeResponse);
+      return null;
     }
-    
-    return null;
   } catch (err) {
     console.error('Error generating QR code:', err);
+    console.error('Error details:', err.message);
+    if (err.ApiResponse) {
+      console.error('Midtrans API response:', err.ApiResponse);
+    }
     return null;
   }
 };
