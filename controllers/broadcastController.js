@@ -5,6 +5,9 @@ const createTransporter = () => {
   let transporter;
   
   if (process.env.EMAIL_SERVICE === 'gmail') {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      throw new Error('Gmail configuration requires EMAIL_USER and EMAIL_PASSWORD environment variables');
+    }
     transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -16,6 +19,9 @@ const createTransporter = () => {
       }
     });
   } else if (process.env.EMAIL_HOST) {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      throw new Error('SMTP configuration requires EMAIL_USER and EMAIL_PASSWORD environment variables');
+    }
     transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
       port: parseInt(process.env.EMAIL_PORT) || 587,
@@ -47,10 +53,17 @@ const verifyTransporter = async (transporter) => {
   try {
     await transporter.verify();
     console.log('Email transporter verified successfully');
-    return true;
+    return { success: true };
   } catch (error) {
     console.error('Email transporter verification failed:', error.message);
-    return false;
+    console.error('Full error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response
+    };
   }
 };
 
@@ -88,13 +101,35 @@ exports.sendBroadcast = async (req, res) => {
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'N/A'
     });
     
-    const transporter = createTransporter();
+    let transporter;
+    try {
+      transporter = createTransporter();
+    } catch (configError) {
+      return res.status(500).json({
+        message: configError.message || "Email configuration error",
+        error: "Configuration error",
+        code: "ECONFIG"
+      });
+    }
     
-    const isVerified = await verifyTransporter(transporter);
-    if (!isVerified) {
+    const verification = await verifyTransporter(transporter);
+    if (!verification.success) {
+      let errorMessage = "Email server connection failed. ";
+      if (verification.code === 'EAUTH') {
+        errorMessage += "Authentication failed. Please check your EMAIL_USER and EMAIL_PASSWORD.";
+      } else if (verification.code === 'ECONNECTION' || verification.code === 'ETIMEDOUT') {
+        errorMessage += "Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT.";
+      } else if (verification.error) {
+        errorMessage += verification.error;
+      } else {
+        errorMessage += "Please check your email configuration.";
+      }
+      
       return res.status(500).json({ 
-        message: "Email server connection failed. Please check your email configuration.",
-        error: "Transporter verification failed"
+        message: errorMessage,
+        error: verification.error || "Transporter verification failed",
+        code: verification.code,
+        details: verification.response
       });
     }
     
@@ -186,13 +221,35 @@ exports.testEmail = async (req, res) => {
     }
     
     console.log('Testing email configuration...');
-    const transporter = createTransporter();
+    let transporter;
+    try {
+      transporter = createTransporter();
+    } catch (configError) {
+      return res.status(500).json({
+        message: configError.message || "Email configuration error",
+        error: "Configuration error",
+        code: "ECONFIG"
+      });
+    }
     
-    const isVerified = await verifyTransporter(transporter);
-    if (!isVerified) {
+    const verification = await verifyTransporter(transporter);
+    if (!verification.success) {
+      let errorMessage = "Email server connection failed. ";
+      if (verification.code === 'EAUTH') {
+        errorMessage += "Authentication failed. Please check your EMAIL_USER and EMAIL_PASSWORD.";
+      } else if (verification.code === 'ECONNECTION' || verification.code === 'ETIMEDOUT') {
+        errorMessage += "Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT.";
+      } else if (verification.error) {
+        errorMessage += verification.error;
+      } else {
+        errorMessage += "Please check your email configuration.";
+      }
+      
       return res.status(500).json({ 
-        message: "Email server connection failed. Please check your email configuration.",
-        error: "Transporter verification failed"
+        message: errorMessage,
+        error: verification.error || "Transporter verification failed",
+        code: verification.code,
+        details: verification.response
       });
     }
     
