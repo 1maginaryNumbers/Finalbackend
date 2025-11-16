@@ -22,8 +22,6 @@ app.use((req, res, next) => {
   
   if (req.path === '/api/sumbangan/webhook') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
   } else if (origin) {
     res.setHeader('Access-Control-Allow-Origin', origin);
   }
@@ -33,7 +31,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
   
   if (req.method === 'OPTIONS') {
-    return res.status(200).json({});
+    return res.status(200).end();
   }
   
   next();
