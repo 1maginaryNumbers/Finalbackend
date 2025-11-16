@@ -7,6 +7,8 @@ router.post("/", pendaftaranController.createPendaftaran);
 router.get("/", pendaftaranController.getAllPendaftaran);
 router.get("/check/:kegiatanId/:email", pendaftaranController.checkRegistrationStatus);
 router.get("/filter/:kegiatanName", pendaftaranController.getPendaftaranByKegiatanName);
+router.post("/bulk-send-qr", authMiddleware, pendaftaranController.bulkSendQRCodeEmail);
+router.post("/:id/send-qr", authMiddleware, pendaftaranController.sendQRCodeEmail);
 router.get("/:id", pendaftaranController.getPendaftaranById);
 router.put("/:id", authMiddleware, pendaftaranController.updatePendaftaran);
 router.delete("/bulk", authMiddleware, pendaftaranController.bulkDeletePendaftaran);
