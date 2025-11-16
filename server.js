@@ -24,14 +24,16 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
   } else if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+  } else if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
   }
   
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
   
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+    return res.status(200).json({});
   }
   
   next();
