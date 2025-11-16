@@ -388,7 +388,7 @@ exports.createPayment = async (req, res) => {
       },
       item_details: [
         {
-          id: sumbangan._id.toString(),
+          id: sumbanganExists._id.toString(),
           price: parseFloat(nominal),
           quantity: 1,
           name: `Donasi - ${sumbanganExists.namaEvent}`
