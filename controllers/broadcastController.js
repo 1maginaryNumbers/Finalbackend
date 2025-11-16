@@ -2,26 +2,35 @@ const Umat = require("../models/umat");
 const nodemailer = require("nodemailer");
 
 const createTransporter = () => {
+  let transporter;
+  
   if (process.env.EMAIL_SERVICE === 'gmail') {
-    return nodemailer.createTransport({
+    transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
   } else if (process.env.EMAIL_HOST) {
-    return nodemailer.createTransport({
+    transporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT || 587,
+      port: parseInt(process.env.EMAIL_PORT) || 587,
       secure: process.env.EMAIL_SECURE === 'true',
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
   } else {
-    return nodemailer.createTransport({
+    console.warn('No email configuration found, using test configuration');
+    transporter = nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
       auth: {
@@ -29,6 +38,19 @@ const createTransporter = () => {
         pass: 'test'
       }
     });
+  }
+  
+  return transporter;
+};
+
+const verifyTransporter = async (transporter) => {
+  try {
+    await transporter.verify();
+    console.log('Email transporter verified successfully');
+    return true;
+  } catch (error) {
+    console.error('Email transporter verification failed:', error.message);
+    return false;
   }
 };
 
@@ -58,46 +80,79 @@ exports.sendBroadcast = async (req, res) => {
       return res.status(400).json({ message: "No valid email addresses found" });
     }
     
+    console.log(`Preparing to send emails to ${emailList.length} recipients`);
+    console.log('Email configuration:', {
+      service: process.env.EMAIL_SERVICE || 'custom',
+      host: process.env.EMAIL_HOST || 'N/A',
+      user: process.env.EMAIL_USER || 'N/A',
+      from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'N/A'
+    });
+    
     const transporter = createTransporter();
     
-    const emailPromises = emailList.map(email => {
-      const mailOptions = {
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com',
-        to: email,
-        subject: subject,
-        text: message,
-        html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
-              ${subject}
-            </h2>
-            <div style="margin-top: 20px; white-space: pre-wrap;">${message.replace(/\n/g, '<br>')}</div>
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 12px;">
-              <p>This is an automated message from Vihara Management System.</p>
-            </div>
-          </div>
-        </div>`
-      };
-      
-      return transporter.sendMail(mailOptions).catch(err => {
-        console.error(`Failed to send email to ${email}:`, err.message);
-        return { error: err.message, email };
+    const isVerified = await verifyTransporter(transporter);
+    if (!isVerified) {
+      return res.status(500).json({ 
+        message: "Email server connection failed. Please check your email configuration.",
+        error: "Transporter verification failed"
       });
-    });
+    }
     
-    const results = await Promise.allSettled(emailPromises);
+    const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
+    const failedEmails = [];
+    const successfulEmails = [];
     
-    const successful = results.filter(r => r.status === 'fulfilled' && !r.value.error).length;
-    const failed = results.length - successful;
+    for (const email of emailList) {
+      try {
+        const mailOptions = {
+          from: `"Vihara Management" <${fromEmail}>`,
+          to: email,
+          subject: subject,
+          text: message,
+          html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+                ${subject.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+              </h2>
+              <div style="margin-top: 20px; white-space: pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</div>
+              <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 12px;">
+                <p>This is an automated message from Vihara Management System.</p>
+              </div>
+            </div>
+          </div>`
+        };
+        
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`Email sent successfully to ${email}. MessageId: ${info.messageId}`);
+        successfulEmails.push({ email, messageId: info.messageId });
+      } catch (err) {
+        console.error(`Failed to send email to ${email}:`, err.message);
+        console.error('Error details:', err);
+        failedEmails.push({ email, error: err.message });
+      }
+    }
     
-    res.json({
+    const response = {
       message: `Email broadcast completed`,
       totalRecipients: emailList.length,
-      successful,
-      failed,
-      subject,
-      message
-    });
+      successful: successfulEmails.length,
+      failed: failedEmails.length,
+      successfulEmails: successfulEmails.map(e => e.email),
+      failedEmails: failedEmails.map(e => ({ email: e.email, error: e.error }))
+    };
+    
+    if (failedEmails.length > 0) {
+      console.warn(`Some emails failed to send:`, failedEmails);
+    }
+    
+    if (successfulEmails.length === 0) {
+      return res.status(500).json({
+        ...response,
+        message: "All emails failed to send. Please check your email configuration and server logs."
+      });
+    }
+    
+    res.json(response);
   } catch (err) {
     console.error("Error sending broadcast:", err);
     res.status(500).json({
@@ -117,6 +172,65 @@ exports.getUmatForBroadcast = async (req, res) => {
   } catch (err) {
     res.status(500).json({
       message: "Error fetching umat for broadcast",
+      error: err.message
+    });
+  }
+};
+
+exports.testEmail = async (req, res) => {
+  try {
+    const { testEmail } = req.body;
+    
+    if (!testEmail) {
+      return res.status(400).json({ message: "Test email address is required" });
+    }
+    
+    console.log('Testing email configuration...');
+    const transporter = createTransporter();
+    
+    const isVerified = await verifyTransporter(transporter);
+    if (!isVerified) {
+      return res.status(500).json({ 
+        message: "Email server connection failed. Please check your email configuration.",
+        error: "Transporter verification failed"
+      });
+    }
+    
+    const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
+    
+    const mailOptions = {
+      from: `"Vihara Management" <${fromEmail}>`,
+      to: testEmail,
+      subject: 'Test Email from Vihara Management System',
+      text: 'This is a test email to verify your email configuration.',
+      html: `<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px;">
+            Test Email
+          </h2>
+          <div style="margin-top: 20px;">
+            <p>This is a test email to verify your email configuration.</p>
+            <p>If you received this email, your email settings are working correctly.</p>
+          </div>
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #7f8c8d; font-size: 12px;">
+            <p>This is an automated message from Vihara Management System.</p>
+          </div>
+        </div>
+      </div>`
+    };
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`Test email sent successfully to ${testEmail}. MessageId: ${info.messageId}`);
+    
+    res.json({
+      message: "Test email sent successfully",
+      messageId: info.messageId,
+      to: testEmail
+    });
+  } catch (err) {
+    console.error("Error sending test email:", err);
+    res.status(500).json({
+      message: "Error sending test email",
       error: err.message
     });
   }

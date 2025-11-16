@@ -7,6 +7,7 @@ const authMiddleware = require("../middlewares/auth");
 router.post("/", umatController.createUmat);
 router.get("/", umatController.getAllUmat);
 router.post("/broadcast", authMiddleware, broadcastController.sendBroadcast);
+router.post("/broadcast/test", authMiddleware, broadcastController.testEmail);
 router.get("/broadcast/recipients", authMiddleware, broadcastController.getUmatForBroadcast);
 router.get("/check/:nama", umatController.checkUmatByName);
 router.get("/:id", umatController.getUmatById);
