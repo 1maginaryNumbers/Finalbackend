@@ -56,6 +56,8 @@ exports.createPendaftaran = async (req, res) => {
     
     await pendaftaran.save();
     
+    await pendaftaran.populate('kegiatan');
+    
     await logActivity(req, {
       actionType: 'CREATE',
       entityType: 'PENDAFTARAN',
@@ -70,9 +72,15 @@ exports.createPendaftaran = async (req, res) => {
       }
     });
     
+    const emailResult = await sendQRCodeEmailToPendaftaran(pendaftaran, req);
+    if (!emailResult.success) {
+      console.warn(`Failed to send automatic QR code email to ${pendaftaran.email}:`, emailResult.error);
+    }
+    
     res.status(201).json({
       message: "Pendaftaran successful",
-      pendaftaran
+      pendaftaran,
+      emailSent: emailResult.success
     });
   } catch (err) {
     res.status(500).json({
@@ -132,7 +140,8 @@ exports.daftarKegiatan = async (req, res) => {
           const existingUmat = await Umat.findOne({ email: p.email });
           const tipePerson = existingUmat ? 'internal' : 'external';
           
-          const qrCode = crypto.randomBytes(16).toString('hex');
+          const qrCodeData = crypto.randomBytes(16).toString('hex');
+          const qrCodeImage = await QRCode.toDataURL(qrCodeData);
           
           const pendaftaran = new Pendaftaran({
             kegiatan: kegiatanId,
@@ -141,10 +150,18 @@ exports.daftarKegiatan = async (req, res) => {
             email: p.email,
             nomorTelepon: p.nomorTelepon,
             tipePerson,
-            qrCode
+            qrCode: qrCodeImage,
+            qrCodeData: qrCodeData
           });
           
           await pendaftaran.save();
+          await pendaftaran.populate('kegiatan');
+          
+          const emailResult = await sendQRCodeEmailToPendaftaran(pendaftaran, req);
+          if (!emailResult.success) {
+            console.warn(`Failed to send automatic QR code email to ${pendaftaran.email}:`, emailResult.error);
+          }
+          
           results.push(pendaftaran);
         } catch (err) {
           errors.push({ 
@@ -171,7 +188,8 @@ exports.daftarKegiatan = async (req, res) => {
         });
       }
       
-      const qrCode = crypto.randomBytes(16).toString('hex');
+      const qrCodeData = crypto.randomBytes(16).toString('hex');
+      const qrCodeImage = await QRCode.toDataURL(qrCodeData);
       
       const pendaftaran = new Pendaftaran({
         kegiatan: kegiatanId,
@@ -180,10 +198,18 @@ exports.daftarKegiatan = async (req, res) => {
         email: peserta.email,
         nomorTelepon: peserta.nomorTelepon,
         tipePerson: peserta.tipePerson || 'external',
-        qrCode
+        qrCode: qrCodeImage,
+        qrCodeData: qrCodeData
       });
       
       await pendaftaran.save();
+      await pendaftaran.populate('kegiatan');
+      
+      const emailResult = await sendQRCodeEmailToPendaftaran(pendaftaran, req);
+      if (!emailResult.success) {
+        console.warn(`Failed to send automatic QR code email to ${pendaftaran.email}:`, emailResult.error);
+      }
+      
       results.push(pendaftaran);
     }
     
@@ -442,7 +468,7 @@ exports.getPendaftaranByKegiatanName = async (req, res) => {
     }
     
     const [pendaftaran, allPendaftaran] = await Promise.all([
-      Pendaftaran.find(query).sort({ tanggalDaftar: -1 }),
+      Pendaftaran.find(query).populate('kegiatan', 'namaKegiatan tanggalMulai tanggalSelesai').sort({ tanggalDaftar: -1 }),
       Pendaftaran.find({}, 'namaKegiatan')
     ]);
     
@@ -501,38 +527,22 @@ const createTransporter = () => {
   return transporter;
 };
 
-exports.sendQRCodeEmail = async (req, res) => {
+const sendQRCodeEmailToPendaftaran = async (pendaftaran, req = null) => {
   try {
-    const { id } = req.params;
-    
-    const pendaftaran = await Pendaftaran.findById(id).populate('kegiatan');
-    
-    if (!pendaftaran) {
-      return res.status(404).json({ message: "Pendaftaran not found" });
-    }
-    
-    if (!pendaftaran.email) {
-      return res.status(400).json({ message: "No email address found for this registration" });
-    }
-    
-    if (!pendaftaran.qrCode) {
-      return res.status(400).json({ message: "No QR code found for this registration" });
+    if (!pendaftaran.email || !pendaftaran.qrCode) {
+      return { success: false, error: 'Missing email or QR code' };
     }
     
     let transporter;
     try {
       transporter = createTransporter();
     } catch (configError) {
-      return res.status(500).json({
-        message: configError.message || "Email configuration error",
-        error: "Configuration error",
-        code: "ECONFIG"
-      });
+      console.error('Email configuration error:', configError.message);
+      return { success: false, error: configError.message };
     }
     
     const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
     const kegiatan = pendaftaran.kegiatan || { namaKegiatan: pendaftaran.namaKegiatan };
-    
     const qrCodeBase64 = pendaftaran.qrCode.split(',')[1];
     
     const mailOptions = {
@@ -626,17 +636,53 @@ exports.sendQRCodeEmail = async (req, res) => {
     
     await transporter.sendMail(mailOptions);
     
-    await logActivity(req, {
-      actionType: 'SEND_EMAIL',
-      entityType: 'PENDAFTARAN',
-      entityId: pendaftaran._id,
-      entityName: pendaftaran.namaLengkap,
-      description: `Sent QR code email to ${pendaftaran.email}`,
-      details: { 
-        email: pendaftaran.email,
-        kegiatan: kegiatan.namaKegiatan || pendaftaran.namaKegiatan
-      }
-    });
+    if (req) {
+      await logActivity(req, {
+        actionType: 'SEND_EMAIL',
+        entityType: 'PENDAFTARAN',
+        entityId: pendaftaran._id,
+        entityName: pendaftaran.namaLengkap,
+        description: `Sent QR code email to ${pendaftaran.email} (automatic on registration)`,
+        details: { 
+          email: pendaftaran.email,
+          kegiatan: kegiatan.namaKegiatan || pendaftaran.namaKegiatan
+        }
+      });
+    }
+    
+    return { success: true };
+  } catch (err) {
+    console.error(`Error sending QR code email to ${pendaftaran.email}:`, err.message);
+    return { success: false, error: err.message };
+  }
+};
+
+exports.sendQRCodeEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const pendaftaran = await Pendaftaran.findById(id).populate('kegiatan');
+    
+    if (!pendaftaran) {
+      return res.status(404).json({ message: "Pendaftaran not found" });
+    }
+    
+    if (!pendaftaran.email) {
+      return res.status(400).json({ message: "No email address found for this registration" });
+    }
+    
+    if (!pendaftaran.qrCode) {
+      return res.status(400).json({ message: "No QR code found for this registration" });
+    }
+    
+    const emailResult = await sendQRCodeEmailToPendaftaran(pendaftaran, req);
+    
+    if (!emailResult.success) {
+      return res.status(500).json({
+        message: "Error sending QR code email",
+        error: emailResult.error
+      });
+    }
     
     res.json({
       message: "QR code and details sent successfully",
@@ -673,135 +719,19 @@ exports.bulkSendQRCodeEmail = async (req, res) => {
       });
     }
     
-    let transporter;
-    try {
-      transporter = createTransporter();
-    } catch (configError) {
-      return res.status(500).json({
-        message: configError.message || "Email configuration error",
-        error: "Configuration error",
-        code: "ECONFIG"
-      });
-    }
-    
-    const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
     const successfulEmails = [];
     const failedEmails = [];
     
     for (const pendaftaran of validPendaftaran) {
-      try {
-        const kegiatan = pendaftaran.kegiatan || { namaKegiatan: pendaftaran.namaKegiatan };
-        const qrCodeBase64 = pendaftaran.qrCode.split(',')[1];
-        
-        const mailOptions = {
-          from: `"Vihara BDC" <${fromEmail}>`,
-          to: pendaftaran.email,
-          subject: `QR Code dan Detail Pendaftaran - ${kegiatan.namaKegiatan || pendaftaran.namaKegiatan}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto;">
-              <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 8px 8px 0 0;">
-                <h1 style="color: white; margin: 0; font-size: 24px;">Pendaftaran Berhasil</h1>
-              </div>
-              
-              <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 8px 8px;">
-                <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
-                  Yth. <strong>${pendaftaran.namaLengkap}</strong>,
-                </p>
-                
-                <p style="font-size: 14px; color: #666; margin-bottom: 20px;">
-                  Terima kasih telah mendaftar untuk kegiatan <strong>${kegiatan.namaKegiatan || pendaftaran.namaKegiatan}</strong>.
-                  Berikut adalah detail pendaftaran dan QR Code Anda:
-                </p>
-                
-                <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  <h3 style="color: #667eea; margin-top: 0; font-size: 18px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">
-                    Detail Pendaftaran
-                  </h3>
-                  <table style="width: 100%; border-collapse: collapse;">
-                    <tr>
-                      <td style="padding: 8px 0; color: #666; width: 40%;"><strong>Nama Lengkap:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${pendaftaran.namaLengkap}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;"><strong>Email:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${pendaftaran.email}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;"><strong>Nomor Telepon:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${pendaftaran.nomorTelepon || '-'}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;"><strong>Kegiatan:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${kegiatan.namaKegiatan || pendaftaran.namaKegiatan}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;"><strong>Tanggal Daftar:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${new Date(pendaftaran.tanggalDaftar).toLocaleDateString('id-ID', { 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}</td>
-                    </tr>
-                    <tr>
-                      <td style="padding: 8px 0; color: #666;"><strong>Tipe:</strong></td>
-                      <td style="padding: 8px 0; color: #333;">${pendaftaran.tipePerson === 'internal' ? 'Internal' : 'External'}</td>
-                    </tr>
-                  </table>
-                </div>
-                
-                <div style="background: white; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  <h3 style="color: #667eea; margin-top: 0; font-size: 18px; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-bottom: 20px;">
-                    QR Code Anda
-                  </h3>
-                  <img src="cid:qrcode" alt="QR Code" style="max-width: 300px; height: auto; border: 4px solid #667eea; border-radius: 8px; padding: 10px; background: white;" />
-                  <p style="font-size: 12px; color: #999; margin-top: 15px;">
-                    Simpan QR Code ini untuk keperluan absensi saat kegiatan berlangsung.
-                  </p>
-                </div>
-                
-                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 4px;">
-                  <p style="margin: 0; font-size: 14px; color: #856404;">
-                    <strong>Catatan Penting:</strong> Harap simpan email ini dan tampilkan QR Code saat mengikuti kegiatan untuk proses absensi.
-                  </p>
-                </div>
-                
-                <div style="text-align: center; padding-top: 20px; border-top: 1px solid #dee2e6; color: #6c757d; font-size: 12px;">
-                  <p style="margin: 0;">Email ini dikirim secara otomatis dari Vihara BDC System.</p>
-                  <p style="margin: 5px 0 0 0;">Jika Anda memiliki pertanyaan, silakan hubungi kami.</p>
-                </div>
-              </div>
-            </div>
-          `,
-          attachments: [
-            {
-              filename: `QRCode_${pendaftaran.namaLengkap.replace(/\s+/g, '_')}.png`,
-              content: qrCodeBase64,
-              encoding: 'base64',
-              cid: 'qrcode'
-            }
-          ]
-        };
-        
-        await transporter.sendMail(mailOptions);
+      const emailResult = await sendQRCodeEmailToPendaftaran(pendaftaran, req);
+      
+      if (emailResult.success) {
         successfulEmails.push({ email: pendaftaran.email, nama: pendaftaran.namaLengkap });
-        
-        await logActivity(req, {
-          actionType: 'SEND_EMAIL',
-          entityType: 'PENDAFTARAN',
-          entityId: pendaftaran._id,
-          entityName: pendaftaran.namaLengkap,
-          description: `Sent QR code email to ${pendaftaran.email} (bulk send)`,
-          details: { 
-            email: pendaftaran.email,
-            kegiatan: kegiatan.namaKegiatan || pendaftaran.namaKegiatan
-          }
-        });
-      } catch (err) {
-        console.error(`Failed to send email to ${pendaftaran.email}:`, err.message);
+      } else {
         failedEmails.push({ 
           email: pendaftaran.email, 
           nama: pendaftaran.namaLengkap,
-          error: err.message 
+          error: emailResult.error 
         });
       }
     }
