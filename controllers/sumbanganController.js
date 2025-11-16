@@ -13,6 +13,8 @@ exports.createSumbangan = async (req, res) => {
     }
     
     let qrisImage = '';
+    let qrisString = '';
+    let generatedQR = null;
     
     if (req.file && req.file.buffer) {
       const imageBuffer = req.file.buffer;
@@ -22,9 +24,11 @@ exports.createSumbangan = async (req, res) => {
     } else {
       console.log('No QRIS image uploaded, generating automatically...');
       const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent);
+      const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
+      generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent, expirationDate);
       if (generatedQR) {
-        qrisImage = generatedQR;
+        qrisImage = generatedQR.image;
+        qrisString = generatedQR.string;
         console.log('QRIS generated and saved successfully');
       } else {
         console.warn('QRIS generation failed, creating donation event without QRIS');
@@ -35,6 +39,8 @@ exports.createSumbangan = async (req, res) => {
       namaEvent,
       deskripsi,
       qrisImage,
+      qrisString,
+      qrisExpirationDate: tanggalSelesai ? new Date(tanggalSelesai) : null,
       targetDana,
       tanggalSelesai
     });
@@ -133,6 +139,79 @@ exports.getSumbanganById = async (req, res) => {
   }
 };
 
+exports.getQRISImage = async (req, res) => {
+  try {
+    const sumbangan = await Sumbangan.findById(req.params.id);
+    
+    if (!sumbangan) {
+      return res.status(404).json({ message: "Sumbangan not found" });
+    }
+    
+    if (!sumbangan.qrisImage) {
+      return res.status(404).json({ message: "QRIS image not found" });
+    }
+
+    if (sumbangan.qrisExpirationDate && new Date(sumbangan.qrisExpirationDate) < new Date()) {
+      return res.status(410).json({ 
+        message: "QRIS has expired",
+        expiredDate: sumbangan.qrisExpirationDate
+      });
+    }
+    
+    if (sumbangan.qrisImage.startsWith('data:')) {
+      const base64Data = sumbangan.qrisImage.split(',')[1];
+      const mimeType = sumbangan.qrisImage.match(/data:([^;]+)/)?.[1] || 'image/png';
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `inline; filename="qris-${sumbangan._id}.png"`);
+      res.send(imageBuffer);
+    } else {
+      res.redirect(sumbangan.qrisImage);
+    }
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching QRIS image",
+      error: err.message
+    });
+  }
+};
+
+exports.getQRISString = async (req, res) => {
+  try {
+    const sumbangan = await Sumbangan.findById(req.params.id);
+    
+    if (!sumbangan) {
+      return res.status(404).json({ message: "Sumbangan not found" });
+    }
+    
+    if (!sumbangan.qrisString) {
+      return res.status(404).json({ message: "QRIS string not found" });
+    }
+
+    if (sumbangan.qrisExpirationDate && new Date(sumbangan.qrisExpirationDate) < new Date()) {
+      return res.status(410).json({ 
+        message: "QRIS has expired",
+        expiredDate: sumbangan.qrisExpirationDate
+      });
+    }
+    
+    res.json({
+      qrisString: sumbangan.qrisString,
+      orderId: sumbangan._id.toString(),
+      eventName: sumbangan.namaEvent,
+      targetAmount: sumbangan.targetDana,
+      expirationDate: sumbangan.qrisExpirationDate,
+      isExpired: sumbangan.qrisExpirationDate ? new Date(sumbangan.qrisExpirationDate) < new Date() : false
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error fetching QRIS string",
+      error: err.message
+    });
+  }
+};
+
 exports.updateSumbangan = async (req, res) => {
   try {
     const { namaEvent, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai, regenerateQR } = req.body;
@@ -158,9 +237,12 @@ exports.updateSumbangan = async (req, res) => {
     } else if (regenerateQR === 'true' || regenerateQR === true) {
       console.log('Regenerating QRIS for donation event:', sumbangan._id);
       const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent);
+      const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate);
       if (generatedQR) {
-        sumbangan.qrisImage = generatedQR;
+        sumbangan.qrisImage = generatedQR.image;
+        sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisExpirationDate = expirationDate;
         console.log('QRIS regenerated successfully');
       } else {
         console.warn('QRIS regeneration failed');
@@ -168,11 +250,18 @@ exports.updateSumbangan = async (req, res) => {
     } else if (!sumbangan.qrisImage && !req.file) {
       console.log('No QRIS image exists, generating automatically during update...');
       const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent);
+      const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate);
       if (generatedQR) {
-        sumbangan.qrisImage = generatedQR;
+        sumbangan.qrisImage = generatedQR.image;
+        sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisExpirationDate = expirationDate;
         console.log('QRIS generated during update');
       }
+    }
+
+    if (tanggalSelesai && (!sumbangan.qrisExpirationDate || regenerateQR === 'true' || regenerateQR === true)) {
+      sumbangan.qrisExpirationDate = new Date(tanggalSelesai);
     }
     
     await sumbangan.save();
@@ -315,7 +404,7 @@ const getMidtransCoreApi = () => {
   });
 };
 
-const generateQRCode = async (orderId, amount, eventName) => {
+const generateQRCode = async (orderId, amount, eventName, expirationDate) => {
   try {
     if (!process.env.MIDTRANS_SERVER_KEY) {
       console.error('MIDTRANS_SERVER_KEY is not set');
@@ -339,6 +428,20 @@ const generateQRCode = async (orderId, amount, eventName) => {
         }
       ]
     };
+
+    if (expirationDate) {
+      const expiryTime = new Date(expirationDate);
+      expiryTime.setHours(23, 59, 59, 999);
+      const expiryMinutes = Math.floor((expiryTime.getTime() - Date.now()) / (1000 * 60));
+      
+      if (expiryMinutes > 0) {
+        parameter.custom_expiry = {
+          expiry_duration: expiryMinutes,
+          unit: 'minute'
+        };
+        console.log('Setting QRIS expiration:', expiryMinutes, 'minutes from now');
+      }
+    }
     
     console.log('Attempting to generate QRIS with orderId:', orderId, 'amount:', amount);
     const chargeResponse = await coreApi.charge(parameter);
@@ -356,7 +459,13 @@ const generateQRCode = async (orderId, amount, eventName) => {
       });
       
       console.log('QRIS image generated successfully');
-      return qrCodeImage;
+      return {
+        image: qrCodeImage,
+        string: qrString,
+        transactionId: chargeResponse.transaction_id,
+        orderId: chargeResponse.order_id,
+        expirationDate: expirationDate
+      };
     } else {
       console.error('Midtrans charge failed or no QR string:', chargeResponse);
       return null;

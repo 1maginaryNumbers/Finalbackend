@@ -11,6 +11,8 @@ router.post("/webhook", sumbanganController.handleWebhook);
 router.get("/transaksi", sumbanganController.getAllTransaksi);
 router.put("/transaksi/:id/status", sumbanganController.updateTransaksiStatus);
 router.get("/:id", sumbanganController.getSumbanganById);
+router.get("/:id/qris-image", sumbanganController.getQRISImage);
+router.get("/:id/qris-string", sumbanganController.getQRISString);
 router.put("/:id", upload.single('qrisImage'), handleMulterError, sumbanganController.updateSumbangan);
 router.delete("/:id", sumbanganController.deleteSumbangan);
 
