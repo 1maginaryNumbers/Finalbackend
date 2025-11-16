@@ -200,10 +200,16 @@ exports.createTransaksi = async (req, res) => {
       email,
       nominal,
       metodePembayaran,
-      buktiPembayaran
+      buktiPembayaran,
+      status: req.body.status || 'pending'
     });
     
     await transaksi.save();
+    
+    if (transaksi.status === 'berhasil') {
+      sumbanganExists.danaTerkumpul = (sumbanganExists.danaTerkumpul || 0) + transaksi.nominal;
+      await sumbanganExists.save();
+    }
     
     res.status(201).json({
       message: "Transaksi created successfully",
