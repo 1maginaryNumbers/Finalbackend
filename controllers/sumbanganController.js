@@ -2,6 +2,7 @@ const Sumbangan = require("../models/sumbangan");
 const { logActivity } = require("../utils/activityLogger");
 const Transaksi = require("../models/transaksi");
 const midtransClient = require("midtrans-client");
+const QRCode = require("qrcode");
 
 exports.createSumbangan = async (req, res) => {
   try {
@@ -18,6 +19,12 @@ exports.createSumbangan = async (req, res) => {
       const imageBase64 = imageBuffer.toString('base64');
       const mimetype = req.file.mimetype || 'image/jpeg';
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
+    } else {
+      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const generatedQR = await generateQRCode(orderId, parseFloat(targetDana), namaEvent);
+      if (generatedQR) {
+        qrisImage = generatedQR;
+      }
     }
     
     const sumbangan = new Sumbangan({
@@ -47,6 +54,7 @@ exports.createSumbangan = async (req, res) => {
       sumbangan
     });
   } catch (err) {
+    console.error('Error creating sumbangan:', err);
     res.status(500).json({
       message: "Error creating sumbangan",
       error: err.message
@@ -123,7 +131,7 @@ exports.getSumbanganById = async (req, res) => {
 
 exports.updateSumbangan = async (req, res) => {
   try {
-    const { namaEvent, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai } = req.body;
+    const { namaEvent, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai, regenerateQR } = req.body;
     
     const sumbangan = await Sumbangan.findById(req.params.id);
     
@@ -143,6 +151,12 @@ exports.updateSumbangan = async (req, res) => {
       const imageBase64 = imageBuffer.toString('base64');
       const mimetype = req.file.mimetype || 'image/jpeg';
       sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
+    } else if (regenerateQR === 'true' || regenerateQR === true) {
+      const orderId = `QRIS-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent);
+      if (generatedQR) {
+        sumbangan.qrisImage = generatedQR;
+      }
     }
     
     await sumbangan.save();
@@ -152,6 +166,7 @@ exports.updateSumbangan = async (req, res) => {
       sumbangan
     });
   } catch (err) {
+    console.error('Error updating sumbangan:', err);
     res.status(500).json({
       message: "Error updating sumbangan",
       error: err.message
@@ -273,6 +288,57 @@ const getMidtransSnap = () => {
     serverKey: process.env.MIDTRANS_SERVER_KEY,
     clientKey: process.env.MIDTRANS_CLIENT_KEY
   });
+};
+
+const getMidtransCoreApi = () => {
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+  return new midtransClient.CoreApi({
+    isProduction: isProduction,
+    serverKey: process.env.MIDTRANS_SERVER_KEY,
+    clientKey: process.env.MIDTRANS_CLIENT_KEY
+  });
+};
+
+const generateQRCode = async (orderId, amount, eventName) => {
+  try {
+    const coreApi = getMidtransCoreApi();
+    
+    const parameter = {
+      payment_type: 'qris',
+      transaction_details: {
+        order_id: orderId,
+        gross_amount: amount
+      },
+      item_details: [
+        {
+          id: orderId,
+          price: amount,
+          quantity: 1,
+          name: `Donasi - ${eventName}`
+        }
+      ]
+    };
+    
+    const chargeResponse = await coreApi.charge(parameter);
+    
+    if (chargeResponse.status_code === '201' && chargeResponse.qr_string) {
+      const qrString = chargeResponse.qr_string;
+      
+      const qrCodeImage = await QRCode.toDataURL(qrString, {
+        errorCorrectionLevel: 'M',
+        type: 'image/png',
+        width: 300,
+        margin: 2
+      });
+      
+      return qrCodeImage;
+    }
+    
+    return null;
+  } catch (err) {
+    console.error('Error generating QR code:', err);
+    return null;
+  }
 };
 
 exports.createPayment = async (req, res) => {
