@@ -1,6 +1,5 @@
 require("dotenv").config();
 const express = require("express");
-const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const connectDB = require("./config/db");
@@ -8,56 +7,50 @@ const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
-app.use((req, res, next) => {
-  const allowedOrigins = [
-    'https://bdcadmin.vercel.app',
-    'https://bdctemple.vercel.app',
-    'https://viharabdc.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002'
-  ];
-  
-  const origin = req.headers.origin;
-  
-  if (req.path === '/api/sumbangan/webhook') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
-  
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
-  
-  if (req.method === 'OPTIONS') {
-    return res.status(200).send('');
-  }
-  
-  next();
-});
+const allowedOrigins = [
+  'https://bdcadmin.vercel.app',
+  'https://bdctemple.vercel.app',
+  'https://viharabdc.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002'
+];
 
 app.options('*', (req, res) => {
   const origin = req.headers.origin;
-  const allowedOrigins = [
-    'https://bdcadmin.vercel.app',
-    'https://bdctemple.vercel.app',
-    'https://viharabdc.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002'
-  ];
   
   if (req.path === '/api/sumbangan/webhook') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-  } else if (origin) {
+  } else if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
   
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
-  res.status(200).send('');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  res.status(200).end();
+});
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  if (req.path === '/api/sumbangan/webhook') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
+  } else if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS,PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With');
+  }
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
 });
 
 app.use(express.json());
