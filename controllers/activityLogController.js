@@ -1,4 +1,5 @@
 const ActivityLog = require('../models/activityLog');
+const { logActivity } = require('../utils/activityLogger');
 
 exports.getAllActivityLogs = async (req, res) => {
   try {
@@ -147,6 +148,23 @@ exports.createActivityLog = async (req, res) => {
 exports.deleteActivityLog = async (req, res) => {
   try {
     const { id } = req.params;
+    const logToDelete = await ActivityLog.findById(id);
+    
+    if (logToDelete) {
+      await logActivity(req, {
+        actionType: 'DELETE',
+        entityType: 'SYSTEM',
+        entityId: id,
+        entityName: 'Activity Log',
+        description: `Deleted activity log: ${logToDelete.description}`,
+        details: { 
+          deletedLogId: id,
+          deletedLogDescription: logToDelete.description,
+          deletedLogUser: logToDelete.user
+        }
+      });
+    }
+    
     await ActivityLog.findByIdAndDelete(id);
     res.json({ message: "Activity log deleted successfully" });
   } catch (err) {
@@ -211,6 +229,24 @@ exports.exportActivityLogs = async (req, res) => {
       
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="activity_logs_${new Date().toISOString().split('T')[0]}.csv"`);
+      
+      await logActivity(req, {
+        actionType: 'EXPORT',
+        entityType: 'SYSTEM',
+        entityName: 'Activity Logs',
+        description: `Exported activity logs as ${format.toUpperCase()}`,
+        details: { 
+          format,
+          totalRecords: logs.length,
+          filters: {
+            startDate,
+            endDate,
+            actionType,
+            entityType
+          }
+        }
+      });
+      
       res.send('\ufeff' + csvContent);
     } else if (format === 'json') {
       const formattedLogs = logs.map(log => ({
@@ -248,6 +284,24 @@ exports.exportActivityLogs = async (req, res) => {
       
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="activity_logs_${new Date().toISOString().split('T')[0]}.json"`);
+      
+      await logActivity(req, {
+        actionType: 'EXPORT',
+        entityType: 'SYSTEM',
+        entityName: 'Activity Logs',
+        description: `Exported activity logs as ${format.toUpperCase()}`,
+        details: { 
+          format,
+          totalRecords: logs.length,
+          filters: {
+            startDate,
+            endDate,
+            actionType,
+            entityType
+          }
+        }
+      });
+      
       res.json({
         exportInfo: {
           generatedAt: new Date().toISOString(),

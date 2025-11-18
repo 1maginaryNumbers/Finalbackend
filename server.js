@@ -7,6 +7,8 @@ const { startScheduler } = require("./utils/scheduler");
 
 const app = express();
 
+app.set('trust proxy', true);
+
 app.use((req, res, next) => {
   const allowedOrigins = [
     'https://bdcadmin.vercel.app',

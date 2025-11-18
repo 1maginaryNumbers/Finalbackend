@@ -1,5 +1,6 @@
 const Umat = require("../models/umat");
 const nodemailer = require("nodemailer");
+const { logActivity } = require("../utils/activityLogger");
 
 const createTransporter = () => {
   let transporter;
@@ -181,11 +182,38 @@ exports.sendBroadcast = async (req, res) => {
     }
     
     if (successfulEmails.length === 0) {
+      await logActivity(req, {
+        actionType: 'CREATE',
+        entityType: 'SYSTEM',
+        entityName: 'Email Broadcast',
+        description: `Email broadcast failed: All ${emailList.length} emails failed to send`,
+        details: { 
+          subject,
+          totalRecipients: emailList.length,
+          failed: failedEmails.length,
+          failedEmails: failedEmails.map(e => e.email)
+        },
+        status: 'FAILED'
+      });
+      
       return res.status(500).json({
         ...response,
         message: "All emails failed to send. Please check your email configuration and server logs."
       });
     }
+    
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'SYSTEM',
+      entityName: 'Email Broadcast',
+      description: `Sent email broadcast: ${subject} to ${successfulEmails.length} recipients`,
+      details: { 
+        subject,
+        totalRecipients: emailList.length,
+        successful: successfulEmails.length,
+        failed: failedEmails.length
+      }
+    });
     
     res.json(response);
   } catch (err) {
@@ -278,6 +306,17 @@ exports.testEmail = async (req, res) => {
     
     const info = await transporter.sendMail(mailOptions);
     console.log(`Test email sent successfully to ${testEmail}. MessageId: ${info.messageId}`);
+    
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'SYSTEM',
+      entityName: 'Test Email',
+      description: `Sent test email to ${testEmail}`,
+      details: { 
+        testEmail,
+        messageId: info.messageId
+      }
+    });
     
     res.json({
       message: "Test email sent successfully",

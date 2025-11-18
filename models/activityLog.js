@@ -37,7 +37,8 @@ const activityLogSchema = new mongoose.Schema({
   },
   ipAddress: {
     type: String,
-    required: false
+    required: true,
+    default: 'Unknown'
   },
   userAgent: {
     type: String,

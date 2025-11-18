@@ -1,4 +1,5 @@
 const InfoUmum = require("../models/infoUmum");
+const { logActivity } = require("../utils/activityLogger");
 
 exports.getInfoUmum = async (req, res) => {
   try {
@@ -42,6 +43,18 @@ exports.updateInfoUmum = async (req, res) => {
     infoUmum.tanggalUpdate = new Date();
     
     await infoUmum.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'SYSTEM',
+      entityId: infoUmum._id,
+      entityName: 'Info Umum',
+      description: 'Updated general information',
+      details: { 
+        judul: infoUmum.judul,
+        updatedFields: Object.keys(req.body)
+      }
+    });
     
     res.json({
       message: "Info umum updated successfully",

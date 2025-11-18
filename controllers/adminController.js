@@ -26,6 +26,17 @@ exports.create = async (req, res) => {
     
     await admin.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'ADMIN',
+      entityId: admin._id,
+      entityName: admin.username,
+      description: `Created new admin: ${admin.username}`,
+      details: { 
+        username: admin.username
+      }
+    });
+    
     res.status(201).json({ 
       message: "Admin created successfully", 
       admin: { username: admin.username } 
