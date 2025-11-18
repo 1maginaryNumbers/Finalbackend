@@ -67,8 +67,7 @@ if (fs.existsSync(path.join(__dirname, 'uploads'))) {
 }
 
 if (!process.env.JWT_SECRET) {
-  console.log("Warning: JWT_SECRET not set in .env file. Using default secret.");
-  process.env.JWT_SECRET = "vihara_management_secret_key_2024";
+  throw new Error("JWT_SECRET is required in environment variables. Please set it in your .env file");
 }
 
 connectDB();
