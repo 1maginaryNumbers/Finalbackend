@@ -96,3 +96,29 @@ exports.login = async (req, res) => {
     });
   }
 };
+
+exports.logout = async (req, res) => {
+  try {
+    if (req.admin) {
+      await logActivity(req, {
+        actionType: 'LOGOUT',
+        entityType: 'ADMIN',
+        entityId: req.admin._id,
+        entityName: req.admin.username,
+        description: `Admin logout: ${req.admin.username}`,
+        details: { 
+          username: req.admin.username
+        }
+      });
+    }
+    
+    res.json({ 
+      message: "Logout successful"
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      message: "Error during logout", 
+      error: err.message 
+    });
+  }
+};
