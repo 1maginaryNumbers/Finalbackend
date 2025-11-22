@@ -17,7 +17,7 @@ const activityLogSchema = new mongoose.Schema({
   entityType: {
     type: String,
     required: true,
-    enum: ['UMAT', 'KEGIATAN', 'PENGUMUMAN', 'GALERI', 'PENDAFTARAN', 'SUMBANGAN', 'SARAN', 'MERCHANDISE', 'STRUKTUR', 'ABSENSI', 'ADMIN', 'SYSTEM']
+    enum: ['UMAT', 'KEGIATAN', 'PENGUMUMAN', 'GALERI', 'PENDAFTARAN', 'SUMBANGAN', 'SARAN', 'MERCHANDISE', 'MERCHANDISE_TRANSAKSI', 'TRANSAKSI', 'STRUKTUR', 'ABSENSI', 'ADMIN', 'SYSTEM', 'KATEGORI_JADWAL', 'KATEGORI_GALERI', 'JADWAL']
   },
   entityId: {
     type: mongoose.Schema.Types.ObjectId,
