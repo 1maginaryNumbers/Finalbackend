@@ -3,10 +3,18 @@ const { logActivity } = require("../utils/activityLogger");
 
 exports.createSaran = async (req, res) => {
   try {
-    const { namaLengkap, email, nomorTelepon, kategori, kritikSaran } = req.body;
+    const { namaLengkap, email, nomorTelepon, kategori, kritikSaran, captchaAnswer, captchaSum } = req.body;
     
     if (!namaLengkap || !kritikSaran) {
       return res.status(400).json({ message: "Nama lengkap and kritik saran are required" });
+    }
+    
+    if (captchaAnswer === undefined || captchaSum === undefined) {
+      return res.status(400).json({ message: "Captcha verification is required" });
+    }
+    
+    if (parseInt(captchaAnswer) !== parseInt(captchaSum)) {
+      return res.status(400).json({ message: "Captcha verification failed" });
     }
     
     const saran = new Saran({
