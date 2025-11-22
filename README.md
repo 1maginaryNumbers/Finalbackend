@@ -24,6 +24,7 @@ A complete backend system for managing a Buddhist temple (Vihara) built with Nod
 
 ### Authentication
 - `POST /api/admin/login` - Admin login
+- `POST /api/admin/logout` - Admin logout (protected)
 - `POST /api/admin/create` - Create new admin (protected)
 
 ### Announcements (Pengumuman)
@@ -39,11 +40,13 @@ A complete backend system for managing a Buddhist temple (Vihara) built with Nod
 - `GET /api/kegiatan/:id` - Get event by ID
 - `PUT /api/kegiatan/:id` - Update event (protected)
 - `DELETE /api/kegiatan/:id` - Delete event (protected)
+- `POST /api/kegiatan/bulk-delete` - Bulk delete events (protected)
 
 ### Registration (Pendaftaran)
 - `POST /api/kegiatan/:kegiatanId/daftar` - Register for event
 - `GET /api/kegiatan/:kegiatanId/pendaftaran` - Get registrations for event
 - `GET /api/pendaftaran` - Get all registrations (protected)
+- `GET /api/pendaftaran/check/:kegiatanId/:email` - Check if email is registered for event
 - `GET /api/pendaftaran/:id` - Get registration by ID
 - `DELETE /api/pendaftaran/:id` - Delete registration (protected)
 
@@ -69,6 +72,12 @@ A complete backend system for managing a Buddhist temple (Vihara) built with Nod
 - `GET /api/galeri/kategori/:kategori` - Get gallery by category
 - `PUT /api/galeri/:id` - Update gallery item (protected)
 - `DELETE /api/galeri/:id` - Delete gallery item (protected)
+
+### Gallery Categories (Kategori Galeri)
+- `GET /api/kategori-galeri` - Get all gallery categories
+- `POST /api/kategori-galeri` - Create gallery category (protected)
+- `PUT /api/kategori-galeri/:id` - Update gallery category (protected)
+- `DELETE /api/kategori-galeri/:id` - Delete gallery category (protected)
 
 ### Temple Information (Info Umum)
 - `GET /api/info-umum` - Get temple information
@@ -117,6 +126,21 @@ A complete backend system for managing a Buddhist temple (Vihara) built with Nod
 ### Broadcast
 - `POST /api/umat/broadcast` - Send broadcast email (protected)
 - `GET /api/umat/broadcast/recipients` - Get recipients for broadcast (protected)
+- `POST /api/umat/broadcast/test` - Test email configuration (protected)
+
+### Schedule (Jadwal)
+- `GET /api/jadwal` - Get all schedules
+- `POST /api/jadwal` - Create schedule (protected)
+- `GET /api/jadwal/:id` - Get schedule by ID
+- `PUT /api/jadwal/:id` - Update schedule (protected)
+- `DELETE /api/jadwal/:id` - Delete schedule (protected)
+- `POST /api/jadwal/bulk-delete` - Bulk delete schedules (protected)
+
+### Schedule Categories (Kategori Jadwal)
+- `GET /api/kategori-jadwal` - Get all schedule categories
+- `POST /api/kategori-jadwal` - Create schedule category (protected)
+- `PUT /api/kategori-jadwal/:id` - Update schedule category (protected)
+- `DELETE /api/kategori-jadwal/:id` - Delete schedule category (protected)
 
 ### Activity Logs
 - `GET /api/activity-logs` - Get all activity logs (protected)
@@ -128,6 +152,8 @@ Create a `.env` file in the backend directory with the following variables:
 ### Required Variables
 ```
 PORT=5000
+MONGODB_URI=mongodb://localhost:27017/vihara_management
+# or
 MONGO_URI=mongodb://localhost:27017/vihara_management
 JWT_SECRET=your_jwt_secret_key_here
 ```
