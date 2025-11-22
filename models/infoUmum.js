@@ -1,13 +1,22 @@
 const mongoose = require("mongoose");
 
+const jamOperasionalSchema = new mongoose.Schema({
+  hari: { type: String, required: true },
+  jamBuka: { type: String, required: true },
+  jamTutup: { type: String, required: true },
+  tutup: { type: Boolean, default: false }
+}, { _id: false });
+
 const infoUmumSchema = new mongoose.Schema({
   judul: { type: String, required: true },
   isi: { type: String, required: true },
-  jamBuka: { type: String, default: '08:00 - 17:00' },
   alamat: { type: String },
   telepon: { type: String },
   email: { type: String },
-  website: { type: String },
+  sejarah: { type: String },
+  visi: { type: String },
+  misi: { type: String },
+  jamOperasional: [jamOperasionalSchema],
   tanggalUpdate: { type: Date, default: Date.now }
 });
 
