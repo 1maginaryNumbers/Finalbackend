@@ -1,10 +1,16 @@
 const mongoose = require("mongoose");
 
 const jamOperasionalSchema = new mongoose.Schema({
-  hari: { type: String, required: true },
+  hari: { type: [String], required: true }, // Array of days
   jamBuka: { type: String, required: true },
   jamTutup: { type: String, required: true },
   tutup: { type: Boolean, default: false }
+}, { _id: false });
+
+const tanggalKhususSchema = new mongoose.Schema({
+  tanggal: { type: Date, required: true },
+  keterangan: { type: String }, // Optional description (e.g., "Hari Raya Nyepi", "Tahun Baru")
+  tutup: { type: Boolean, default: true } // Always closed on exceptional dates
 }, { _id: false });
 
 const infoUmumSchema = new mongoose.Schema({
@@ -17,6 +23,7 @@ const infoUmumSchema = new mongoose.Schema({
   visi: { type: String },
   misi: { type: String },
   jamOperasional: [jamOperasionalSchema],
+  tanggalKhusus: [tanggalKhususSchema], // Exceptional dates (holidays, closures)
   tanggalUpdate: { type: Date, default: Date.now }
 });
 

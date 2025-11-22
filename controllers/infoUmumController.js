@@ -24,7 +24,7 @@ exports.getInfoUmum = async (req, res) => {
 
 exports.updateInfoUmum = async (req, res) => {
   try {
-    const { judul, isi, alamat, telepon, email, sejarah, visi, misi, jamOperasional } = req.body;
+    const { judul, isi, alamat, telepon, email, sejarah, visi, misi, jamOperasional, tanggalKhusus } = req.body;
     
     let infoUmum = await InfoUmum.findOne();
     
@@ -42,6 +42,9 @@ exports.updateInfoUmum = async (req, res) => {
     if (misi !== undefined) infoUmum.misi = misi;
     if (jamOperasional !== undefined && Array.isArray(jamOperasional)) {
       infoUmum.jamOperasional = jamOperasional;
+    }
+    if (tanggalKhusus !== undefined && Array.isArray(tanggalKhusus)) {
+      infoUmum.tanggalKhusus = tanggalKhusus;
     }
     
     infoUmum.tanggalUpdate = new Date();
