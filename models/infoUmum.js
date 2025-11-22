@@ -13,6 +13,12 @@ const tanggalKhususSchema = new mongoose.Schema({
   tutup: { type: Boolean, default: true } // Always closed on exceptional dates
 }, { _id: false });
 
+const jadwalPujaBaktiSchema = new mongoose.Schema({
+  hari: { type: [String], required: true }, // Array of days
+  waktu: { type: String, required: true }, // Time (e.g., "08:00", "10:00", "19:00")
+  keterangan: { type: String } // Optional description
+}, { _id: false });
+
 const infoUmumSchema = new mongoose.Schema({
   judul: { type: String, required: true },
   isi: { type: String, required: true },
@@ -24,6 +30,7 @@ const infoUmumSchema = new mongoose.Schema({
   misi: { type: String },
   jamOperasional: [jamOperasionalSchema],
   tanggalKhusus: [tanggalKhususSchema], // Exceptional dates (holidays, closures)
+  jadwalPujaBakti: [jadwalPujaBaktiSchema], // Prayer schedule
   tanggalUpdate: { type: Date, default: Date.now }
 });
 

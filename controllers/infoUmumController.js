@@ -24,7 +24,7 @@ exports.getInfoUmum = async (req, res) => {
 
 exports.updateInfoUmum = async (req, res) => {
   try {
-    const { judul, isi, alamat, telepon, email, sejarah, visi, misi, jamOperasional, tanggalKhusus } = req.body;
+    const { judul, isi, alamat, telepon, email, sejarah, visi, misi, jamOperasional, tanggalKhusus, jadwalPujaBakti } = req.body;
     
     let infoUmum = await InfoUmum.findOne();
     
@@ -45,6 +45,9 @@ exports.updateInfoUmum = async (req, res) => {
     }
     if (tanggalKhusus !== undefined && Array.isArray(tanggalKhusus)) {
       infoUmum.tanggalKhusus = tanggalKhusus;
+    }
+    if (jadwalPujaBakti !== undefined && Array.isArray(jadwalPujaBakti)) {
+      infoUmum.jadwalPujaBakti = jadwalPujaBakti;
     }
     
     infoUmum.tanggalUpdate = new Date();
