@@ -291,6 +291,21 @@ exports.createMerchandiseTransaksi = async (req, res) => {
     transaksi.midtransOrderId = orderId;
     await transaksi.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'MERCHANDISE_TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${namaPembeli} - ${merchandiseItem.nama}`,
+      description: `Created merchandise transaction: ${namaPembeli} purchased ${jumlah}x ${merchandiseItem.nama}`,
+      details: { 
+        namaPembeli,
+        merchandise: merchandiseItem.nama,
+        jumlah,
+        totalHarga,
+        status: 'pending'
+      }
+    });
+    
     const snap = getMidtransSnap();
     
     const parameter = {
@@ -326,6 +341,19 @@ exports.createMerchandiseTransaksi = async (req, res) => {
       console.error('Midtrans error:', midtransError);
       transaksi.status = 'gagal';
       await transaksi.save();
+      
+      await logActivity(req, {
+        actionType: 'UPDATE',
+        entityType: 'MERCHANDISE_TRANSAKSI',
+        entityId: transaksi._id,
+        entityName: `${namaPembeli} - ${merchandiseItem.nama}`,
+        description: `Merchandise transaction failed: Midtrans error`,
+        details: { 
+          status: 'gagal',
+          error: midtransError.message
+        },
+        status: 'FAILED'
+      });
       
       res.status(500).json({
         message: "Failed to create payment transaction",
@@ -388,6 +416,19 @@ exports.updateMerchandiseTransaksiStatus = async (req, res) => {
     if (status) transaksi.status = status;
     
     await transaksi.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'MERCHANDISE_TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${transaksi.namaPembeli} - Transaction`,
+      description: `Updated merchandise transaction status from ${oldStatus} to ${status}`,
+      details: { 
+        oldStatus,
+        newStatus: status,
+        namaPembeli: transaksi.namaPembeli
+      }
+    });
     
     if (status === 'berhasil' || status === 'settlement') {
       const merchandise = await Merchandise.findById(transaksi.merchandise);
@@ -454,6 +495,21 @@ exports.handleWebhook = async (req, res) => {
     const oldStatus = transaksi.status;
     transaksi.status = newStatus;
     await transaksi.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'MERCHANDISE_TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${transaksi.namaPembeli} - Transaction`,
+      description: `Webhook updated merchandise transaction status from ${oldStatus} to ${newStatus}`,
+      details: { 
+        oldStatus,
+        newStatus,
+        transactionStatus: transaction_status,
+        paymentType: payment_type,
+        namaPembeli: transaksi.namaPembeli
+      }
+    });
     
     if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
       const merchandise = await Merchandise.findById(transaksi.merchandise);

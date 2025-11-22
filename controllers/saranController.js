@@ -91,9 +91,24 @@ exports.updateSaranStatus = async (req, res) => {
       return res.status(404).json({ message: "Saran not found" });
     }
     
+    const oldStatus = saran.status;
     if (status) saran.status = status;
     
     await saran.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'SARAN',
+      entityId: saran._id,
+      entityName: saran.namaLengkap,
+      description: `Updated saran status from ${oldStatus} to ${status}`,
+      details: { 
+        namaLengkap: saran.namaLengkap,
+        oldStatus,
+        newStatus: status,
+        kategori: saran.kategori
+      }
+    });
     
     res.json({
       message: "Saran status updated successfully",
@@ -109,11 +124,27 @@ exports.updateSaranStatus = async (req, res) => {
 
 exports.deleteSaran = async (req, res) => {
   try {
-    const saran = await Saran.findByIdAndDelete(req.params.id);
+    const saran = await Saran.findById(req.params.id);
     
     if (!saran) {
       return res.status(404).json({ message: "Saran not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'SARAN',
+      entityId: saran._id,
+      entityName: saran.namaLengkap,
+      description: `Deleted saran from: ${saran.namaLengkap}`,
+      details: { 
+        namaLengkap: saran.namaLengkap,
+        email: saran.email,
+        kategori: saran.kategori,
+        status: saran.status
+      }
+    });
+    
+    await Saran.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Saran deleted successfully" });
   } catch (err) {

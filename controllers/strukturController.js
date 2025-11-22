@@ -104,6 +104,12 @@ exports.updateStruktur = async (req, res) => {
       return res.status(404).json({ message: "Struktur not found" });
     }
     
+    const oldData = {
+      nama: struktur.nama,
+      jabatan: struktur.jabatan,
+      status: struktur.status
+    };
+    
     if (nama) struktur.nama = nama;
     if (jabatan) struktur.jabatan = jabatan;
     if (foto) struktur.foto = foto;
@@ -112,6 +118,22 @@ exports.updateStruktur = async (req, res) => {
     if (status) struktur.status = status;
     
     await struktur.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'STRUKTUR',
+      entityId: struktur._id,
+      entityName: struktur.nama,
+      description: `Updated struktur: ${oldData.nama}`,
+      details: { 
+        oldData,
+        newData: {
+          nama: struktur.nama,
+          jabatan: struktur.jabatan,
+          status: struktur.status
+        }
+      }
+    });
     
     res.json({
       message: "Struktur updated successfully",
@@ -127,11 +149,26 @@ exports.updateStruktur = async (req, res) => {
 
 exports.deleteStruktur = async (req, res) => {
   try {
-    const struktur = await Struktur.findByIdAndDelete(req.params.id);
+    const struktur = await Struktur.findById(req.params.id);
     
     if (!struktur) {
       return res.status(404).json({ message: "Struktur not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'STRUKTUR',
+      entityId: struktur._id,
+      entityName: struktur.nama,
+      description: `Deleted struktur: ${struktur.nama}`,
+      details: { 
+        nama: struktur.nama,
+        jabatan: struktur.jabatan,
+        status: struktur.status
+      }
+    });
+    
+    await Struktur.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Struktur deleted successfully" });
   } catch (err) {

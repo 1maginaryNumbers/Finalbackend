@@ -62,10 +62,27 @@ exports.updateKategori = async (req, res) => {
       return res.status(404).json({ message: "Kategori not found" });
     }
     
+    const oldNama = kategori.nama;
+    const oldWarna = kategori.warna;
+    
     if (nama) kategori.nama = nama;
     if (warna) kategori.warna = warna;
     
     await kategori.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'KATEGORI_JADWAL',
+      entityId: kategori._id,
+      entityName: kategori.nama,
+      description: `Updated category: ${oldNama}`,
+      details: { 
+        oldNama,
+        newNama: kategori.nama,
+        oldWarna,
+        newWarna: kategori.warna
+      }
+    });
     
     res.json({
       message: "Kategori updated successfully",
@@ -84,11 +101,25 @@ exports.updateKategori = async (req, res) => {
 
 exports.deleteKategori = async (req, res) => {
   try {
-    const kategori = await KategoriJadwal.findByIdAndDelete(req.params.id);
+    const kategori = await KategoriJadwal.findById(req.params.id);
     
     if (!kategori) {
       return res.status(404).json({ message: "Kategori not found" });
     }
+    
+    await logActivity(req, {
+      actionType: 'DELETE',
+      entityType: 'KATEGORI_JADWAL',
+      entityId: kategori._id,
+      entityName: kategori.nama,
+      description: `Deleted category: ${kategori.nama}`,
+      details: { 
+        nama: kategori.nama,
+        warna: kategori.warna
+      }
+    });
+    
+    await KategoriJadwal.findByIdAndDelete(req.params.id);
     
     res.json({ message: "Kategori deleted successfully" });
   } catch (err) {
