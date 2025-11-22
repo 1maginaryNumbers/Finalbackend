@@ -349,6 +349,21 @@ exports.createTransaksi = async (req, res) => {
     
     await transaksi.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${namaDonatur} - ${sumbanganExists.namaEvent}`,
+      description: `Created donation transaction: ${namaDonatur} - ${sumbanganExists.namaEvent}`,
+      details: { 
+        namaDonatur,
+        sumbangan: sumbanganExists.namaEvent,
+        nominal,
+        metodePembayaran,
+        status: transaksi.status
+      }
+    });
+    
     if (transaksi.status === 'berhasil') {
       sumbanganExists.danaTerkumpul = (sumbanganExists.danaTerkumpul || 0) + transaksi.nominal;
       await sumbanganExists.save();
@@ -384,15 +399,31 @@ exports.updateTransaksiStatus = async (req, res) => {
   try {
     const { status } = req.body;
     
-    const transaksi = await Transaksi.findById(req.params.id);
+    const transaksi = await Transaksi.findById(req.params.id).populate('sumbangan', 'namaEvent');
     
     if (!transaksi) {
       return res.status(404).json({ message: "Transaksi not found" });
     }
     
+    const oldStatus = transaksi.status;
     if (status) transaksi.status = status;
     
     await transaksi.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${transaksi.namaDonatur} - ${transaksi.sumbangan?.namaEvent || 'Donation'}`,
+      description: `Updated donation transaction status from ${oldStatus} to ${status}`,
+      details: { 
+        oldStatus,
+        newStatus: status,
+        namaDonatur: transaksi.namaDonatur,
+        nominal: transaksi.nominal,
+        sumbangan: transaksi.sumbangan?.namaEvent || 'Unknown'
+      }
+    });
     
     if (status === 'berhasil' || status === 'settlement') {
       const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
@@ -547,6 +578,20 @@ exports.createPayment = async (req, res) => {
     
     await transaksi.save();
     
+    await logActivity(req, {
+      actionType: 'CREATE',
+      entityType: 'TRANSAKSI',
+      entityId: transaksi._id,
+      entityName: `${namaDonatur} - ${sumbanganExists.namaEvent}`,
+      description: `Created donation transaction: ${namaDonatur} donated ${nominal} to ${sumbanganExists.namaEvent}`,
+      details: { 
+        namaDonatur,
+        sumbangan: sumbanganExists.namaEvent,
+        nominal: parseFloat(nominal),
+        status: 'pending'
+      }
+    });
+    
     const snap = getMidtransSnap();
     const expirationDate = sumbanganExists.qrisExpirationDate || sumbanganExists.tanggalSelesai;
     
@@ -658,6 +703,26 @@ exports.handleWebhook = async (req, res) => {
     transaksi.status = newStatus;
     await transaksi.save();
     
+    // Log activity for webhook status update
+    try {
+      await logActivity(req, {
+        actionType: 'UPDATE',
+        entityType: 'TRANSAKSI',
+        entityId: transaksi._id,
+        entityName: `${transaksi.namaDonatur || 'Unknown'} - Donation`,
+        description: `Webhook updated donation transaction status from ${oldStatus} to ${newStatus}`,
+        details: {
+          oldStatus,
+          newStatus,
+          orderId: orderId,
+          transactionStatus: transactionStatus,
+          paymentType: statusResponse.payment_type
+        }
+      });
+    } catch (logError) {
+      console.error('Error logging webhook activity:', logError);
+    }
+    
     if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
       const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
       if (sumbangan) {
@@ -682,19 +747,6 @@ exports.handleWebhook = async (req, res) => {
         await sumbangan.save();
       }
     }
-    
-    await logActivity(req, {
-      actionType: 'UPDATE',
-      entityType: 'TRANSAKSI',
-      entityId: transaksi._id,
-      entityName: transaksi.namaDonatur,
-      description: `Payment webhook received: ${transactionStatus}`,
-      details: {
-        orderId: orderId,
-        transactionStatus: transactionStatus,
-        paymentType: statusResponse.payment_type
-      }
-    });
     
     res.status(200).json({ message: "Webhook processed successfully" });
   } catch (err) {

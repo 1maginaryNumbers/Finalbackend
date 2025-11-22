@@ -417,18 +417,26 @@ exports.updateMerchandiseTransaksiStatus = async (req, res) => {
     
     await transaksi.save();
     
-    await logActivity(req, {
-      actionType: 'UPDATE',
-      entityType: 'MERCHANDISE_TRANSAKSI',
-      entityId: transaksi._id,
-      entityName: `${transaksi.namaPembeli} - Transaction`,
-      description: `Updated merchandise transaction status from ${oldStatus} to ${status}`,
-      details: { 
-        oldStatus,
-        newStatus: status,
-        namaPembeli: transaksi.namaPembeli
-      }
-    });
+    // Log activity for status update
+    try {
+      await logActivity(req, {
+        actionType: 'UPDATE',
+        entityType: 'MERCHANDISE_TRANSAKSI',
+        entityId: transaksi._id,
+        entityName: `${transaksi.namaPembeli} - Transaction`,
+        description: `Updated merchandise transaction status from ${oldStatus} to ${status}`,
+        details: { 
+          oldStatus,
+          newStatus: status,
+          namaPembeli: transaksi.namaPembeli,
+          produk: transaksi.merchandise?.toString() || 'Unknown',
+          jumlah: transaksi.jumlah,
+          totalHarga: transaksi.totalHarga
+        }
+      });
+    } catch (logError) {
+      console.error('Error logging merchandise transaction activity:', logError);
+    }
     
     if (status === 'berhasil' || status === 'settlement') {
       const merchandise = await Merchandise.findById(transaksi.merchandise);
