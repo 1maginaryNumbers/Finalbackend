@@ -3,6 +3,7 @@ const { logActivity } = require("../utils/activityLogger");
 const Transaksi = require("../models/transaksi");
 const midtransClient = require("midtrans-client");
 const QRCode = require("qrcode");
+const nodemailer = require("nodemailer");
 
 exports.createSumbangan = async (req, res) => {
   try {
@@ -405,14 +406,13 @@ exports.updateTransaksiStatus = async (req, res) => {
       actionType: 'UPDATE',
       entityType: 'TRANSAKSI',
       entityId: transaksi._id,
-      entityName: `${transaksi.namaDonatur} - ${transaksi.sumbangan?.namaEvent || 'Donation'}`,
+      entityName: `${transaksi.namaDonatur} - Donasi Sukarela`,
       description: `Updated donation transaction status from ${oldStatus} to ${status}`,
       details: { 
         oldStatus,
         newStatus: status,
         namaDonatur: transaksi.namaDonatur,
-        nominal: transaksi.nominal,
-        sumbangan: transaksi.sumbangan?.namaEvent || 'Unknown'
+        nominal: transaksi.nominal
       }
     });
     
@@ -421,6 +421,14 @@ exports.updateTransaksiStatus = async (req, res) => {
       if (sumbangan) {
         sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
         await sumbangan.save();
+      }
+      
+      if (oldStatus !== 'berhasil' && oldStatus !== 'settlement') {
+        try {
+          await sendReceiptEmail(transaksi);
+        } catch (emailError) {
+          console.error('Error sending receipt email:', emailError);
+        }
       }
     }
     
@@ -433,6 +441,248 @@ exports.updateTransaksiStatus = async (req, res) => {
       message: "Error updating transaksi status",
       error: err.message
     });
+  }
+};
+
+const createTransporter = () => {
+  let transporter;
+  
+  if (process.env.EMAIL_SERVICE === 'gmail') {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      return null;
+    }
+    transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+  } else if (process.env.EMAIL_HOST) {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+      return null;
+    }
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_HOST,
+      port: parseInt(process.env.EMAIL_PORT) || 587,
+      secure: process.env.EMAIL_SECURE === 'true',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+  } else {
+    return null;
+  }
+  
+  return transporter;
+};
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0
+  }).format(amount);
+};
+
+const formatDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  
+  const dateOptions = {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  };
+  
+  const timeOptions = {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  };
+  
+  const dateStr = d.toLocaleDateString('id-ID', dateOptions);
+  const timeStr = d.toLocaleTimeString('id-ID', timeOptions);
+  
+  return `${dateStr} pukul ${timeStr}`;
+};
+
+const sendReceiptEmail = async (transaksi) => {
+  try {
+    if (!transaksi.email || transaksi.email.trim() === '') {
+      console.log('No email address provided for transaction, skipping email receipt');
+      return { success: false, error: 'No email address' };
+    }
+
+    const transporter = createTransporter();
+    if (!transporter) {
+      console.log('Email transporter not configured, skipping email receipt');
+      return { success: false, error: 'Email not configured' };
+    }
+
+    const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
+    
+    let transaksiDate;
+    if (transaksi.tanggalTransaksi) {
+      transaksiDate = transaksi.tanggalTransaksi;
+    } else if (transaksi.createdAt) {
+      transaksiDate = transaksi.createdAt;
+    } else {
+      const freshTransaksi = await Transaksi.findById(transaksi._id);
+      transaksiDate = freshTransaksi?.tanggalTransaksi || freshTransaksi?.createdAt || new Date();
+    }
+    
+    const orderDate = formatDate(transaksiDate);
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f4f4f4;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 0;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px;">Terima Kasih Atas Donasi Anda</h1>
+            <p style="color: #ffffff; margin: 10px 0 0 0; font-size: 16px;">Vihara Buddhayana Dharmawira Centre</p>
+          </div>
+          
+          <div style="padding: 30px;">
+            <p style="font-size: 16px; margin-bottom: 20px;">Halo <strong>${transaksi.namaDonatur}</strong>,</p>
+            <p style="font-size: 16px; margin-bottom: 20px;">Terima kasih telah memberikan donasi sukarela kepada Vihara BDC. Berikut adalah bukti transaksi Anda:</p>
+            
+            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Detail Transaksi</h2>
+              
+              <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666; width: 40%;">Order ID:</td>
+                  <td style="padding: 8px 0; font-weight: bold; font-family: monospace;">${transaksi.midtransOrderId || transaksi._id}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Tanggal:</td>
+                  <td style="padding: 8px 0;">${orderDate}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Nama Donatur:</td>
+                  <td style="padding: 8px 0; font-weight: bold;">${transaksi.namaDonatur}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Nominal:</td>
+                  <td style="padding: 8px 0; font-weight: bold; color: #667eea; font-size: 18px;">${formatCurrency(transaksi.nominal)}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Status:</td>
+                  <td style="padding: 8px 0;">
+                    <span style="background-color: #28a745; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+                      ${transaksi.status === 'berhasil' || transaksi.status === 'settlement' ? 'Berhasil' : transaksi.status}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+            
+            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Metode Pembayaran</h2>
+              
+              <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                <tr>
+                  <td style="padding: 8px 0; color: #666; width: 40%;">Metode:</td>
+                  <td style="padding: 8px 0; font-weight: bold;">${transaksi.paymentGateway === 'midtrans' ? 'Midtrans' : transaksi.metodePembayaran || 'Transfer'}</td>
+                </tr>
+                ${transaksi.midtransPaymentType ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Tipe Pembayaran:</td>
+                  <td style="padding: 8px 0;">${transaksi.midtransPaymentType}${transaksi.midtransBank ? ` (${transaksi.midtransBank})` : ''}</td>
+                </tr>
+                ` : ''}
+                ${transaksi.midtransVaNumber ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #666;">Virtual Account:</td>
+                  <td style="padding: 8px 0; font-family: monospace;">${transaksi.midtransVaNumber}</td>
+                </tr>
+                ` : ''}
+              </table>
+            </div>
+            
+            ${transaksi.pesan ? `
+            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Pesan/Doa</h2>
+              <p style="margin: 10px 0; white-space: pre-wrap;">${transaksi.pesan}</p>
+            </div>
+            ` : ''}
+            
+            <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #856404; font-size: 14px;">
+                <strong>Catatan:</strong> Terima kasih atas donasi sukarela Anda. Semoga Dharma memberkati niat baik Anda.
+              </p>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center; color: #6c757d; font-size: 12px;">
+              <p style="margin: 5px 0;">Jika Anda memiliki pertanyaan, silakan hubungi kami melalui:</p>
+              <p style="margin: 5px 0;">Email: info@viharabdc.com | Telepon: (021) 1234-5678</p>
+              <p style="margin: 15px 0 5px 0;">Terima kasih atas dukungan Anda kepada Vihara BDC.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const textContent = `
+Terima Kasih Atas Donasi Anda
+Vihara Buddhayana Dharmawira Centre
+
+Halo ${transaksi.namaDonatur},
+
+Terima kasih telah memberikan donasi sukarela kepada Vihara BDC. Berikut adalah bukti transaksi Anda:
+
+Detail Transaksi:
+- Order ID: ${transaksi.midtransOrderId || transaksi._id}
+- Tanggal: ${orderDate}
+- Nama Donatur: ${transaksi.namaDonatur}
+- Nominal: ${formatCurrency(transaksi.nominal)}
+- Status: ${transaksi.status === 'berhasil' || transaksi.status === 'settlement' ? 'Berhasil' : transaksi.status}
+
+Metode Pembayaran:
+- Metode: ${transaksi.paymentGateway === 'midtrans' ? 'Midtrans' : transaksi.metodePembayaran || 'Transfer'}
+${transaksi.midtransPaymentType ? `- Tipe Pembayaran: ${transaksi.midtransPaymentType}${transaksi.midtransBank ? ` (${transaksi.midtransBank})` : ''}` : ''}
+${transaksi.midtransVaNumber ? `- Virtual Account: ${transaksi.midtransVaNumber}` : ''}
+
+${transaksi.pesan ? `Pesan/Doa:\n${transaksi.pesan}\n` : ''}
+
+Catatan: Terima kasih atas donasi sukarela Anda. Semoga Dharma memberkati niat baik Anda.
+
+Jika Anda memiliki pertanyaan, silakan hubungi kami melalui:
+Email: info@viharabdc.com | Telepon: (021) 1234-5678
+
+Terima kasih atas dukungan Anda kepada Vihara BDC.
+    `;
+
+    const mailOptions = {
+      from: fromEmail,
+      to: transaksi.email,
+      subject: 'Bukti Donasi - Vihara Buddhayana Dharmawira Centre',
+      html: htmlContent,
+      text: textContent
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Receipt email sent successfully to', transaksi.email, 'MessageId:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('Error sending receipt email:', error);
+    return { success: false, error: error.message };
   }
 };
 
@@ -715,6 +965,12 @@ exports.handleWebhook = async (req, res) => {
     if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
       // Voluntary donation QRIS is reusable, no need to regenerate
       // Just log the successful transaction
+      
+      try {
+        await sendReceiptEmail(transaksi);
+      } catch (emailError) {
+        console.error('Error sending receipt email:', emailError);
+      }
     }
     
     res.status(200).json({ message: "Webhook processed successfully" });
@@ -772,6 +1028,12 @@ exports.syncTransactionStatus = async (req, res) => {
       if (sumbangan) {
         sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
         await sumbangan.save();
+      }
+      
+      try {
+        await sendReceiptEmail(transaksi);
+      } catch (emailError) {
+        console.error('Error sending receipt email:', emailError);
       }
     }
     
