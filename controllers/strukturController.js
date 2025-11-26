@@ -176,3 +176,46 @@ exports.deleteStruktur = async (req, res) => {
     });
   }
 };
+
+exports.bulkDeleteStruktur = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "Array of IDs is required" });
+    }
+    
+    const strukturList = await Struktur.find({ _id: { $in: ids } });
+    
+    if (strukturList.length === 0) {
+      return res.status(404).json({ message: "No struktur found to delete" });
+    }
+    
+    for (const struktur of strukturList) {
+      await logActivity(req, {
+        actionType: 'DELETE',
+        entityType: 'STRUKTUR',
+        entityId: struktur._id,
+        entityName: struktur.nama,
+        description: `Bulk deleted struktur: ${struktur.nama}`,
+        details: { 
+          nama: struktur.nama,
+          jabatan: struktur.jabatan,
+          status: struktur.status
+        }
+      });
+    }
+    
+    await Struktur.deleteMany({ _id: { $in: ids } });
+    
+    res.json({ 
+      message: `Successfully deleted ${strukturList.length} struktur`,
+      deletedCount: strukturList.length
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Error bulk deleting struktur",
+      error: err.message
+    });
+  }
+};
