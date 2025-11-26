@@ -3,7 +3,7 @@ const { logActivity } = require("../utils/activityLogger");
 
 exports.createStruktur = async (req, res) => {
   try {
-    const { nama, jabatan, foto, kontak, urutan } = req.body;
+    const { nama, jabatan, kontak, periode } = req.body;
     
     if (!nama || !jabatan) {
       return res.status(400).json({ message: "Nama and jabatan are required" });
@@ -12,9 +12,8 @@ exports.createStruktur = async (req, res) => {
     const struktur = new Struktur({
       nama,
       jabatan,
-      foto,
       kontak,
-      urutan
+      periode
     });
     
     await struktur.save();
@@ -54,7 +53,7 @@ exports.getAllStruktur = async (req, res) => {
     const totalPages = Math.ceil(totalStruktur / limit);
     
     const struktur = await Struktur.find({ status: 'aktif' })
-      .sort({ urutan: 1 })
+      .sort({ nama: 1 })
       .skip(skip)
       .limit(limit);
     
@@ -96,7 +95,7 @@ exports.getStrukturById = async (req, res) => {
 
 exports.updateStruktur = async (req, res) => {
   try {
-    const { nama, jabatan, foto, kontak, urutan, status } = req.body;
+    const { nama, jabatan, kontak, periode, status } = req.body;
     
     const struktur = await Struktur.findById(req.params.id);
     
@@ -112,9 +111,8 @@ exports.updateStruktur = async (req, res) => {
     
     if (nama) struktur.nama = nama;
     if (jabatan) struktur.jabatan = jabatan;
-    if (foto) struktur.foto = foto;
-    if (kontak) struktur.kontak = kontak;
-    if (urutan !== undefined) struktur.urutan = urutan;
+    if (kontak !== undefined) struktur.kontak = kontak;
+    if (periode !== undefined) struktur.periode = periode;
     if (status) struktur.status = status;
     
     await struktur.save();

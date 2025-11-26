@@ -4,7 +4,7 @@ const strukturSchema = new mongoose.Schema({
   nama: { type: String, required: true },
   jabatan: { type: String, required: true },
   kontak: { type: String },
-  urutan: { type: Number, default: 0 },
+  periode: { type: String },
   status: { type: String, enum: ['aktif', 'nonaktif'], default: 'aktif' }
 });
 
