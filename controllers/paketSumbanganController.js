@@ -62,13 +62,14 @@ const formatCurrency = (amount) => {
 };
 
 const formatDate = (date) => {
-  return new Date(date).toLocaleDateString('id-ID', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  if (!date) return '';
+  const d = new Date(date);
+  const day = d.getDate().toString().padStart(2, '0');
+  const month = d.toLocaleDateString('id-ID', { month: 'long' });
+  const year = d.getFullYear();
+  const hours = d.getHours().toString().padStart(2, '0');
+  const minutes = d.getMinutes().toString().padStart(2, '0');
+  return `${day} ${month} ${year} pukul ${hours}.${minutes}`;
 };
 
 const sendReceiptEmail = async (transaksi, paket) => {
@@ -85,7 +86,9 @@ const sendReceiptEmail = async (transaksi, paket) => {
     }
 
     const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
-    const orderDate = formatDate(transaksi.tanggalTransaksi || new Date());
+    // Ensure we use the actual transaction date, refresh from DB if needed
+    const transaksiDate = transaksi.tanggalTransaksi || transaksi.createdAt || new Date();
+    const orderDate = formatDate(transaksiDate);
     
     const detailBarangHtml = paket.detailBarang && paket.detailBarang.length > 0
       ? paket.detailBarang.map(barang => `
