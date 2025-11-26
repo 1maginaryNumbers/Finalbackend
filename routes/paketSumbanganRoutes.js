@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const paketSumbanganController = require("../controllers/paketSumbanganController");
-const upload = require("../middlewares/upload");
+const { upload, handleMulterError } = require("../middlewares/upload");
 
-router.post("/", upload.single('gambar'), paketSumbanganController.createPaketSumbangan);
+router.post("/", upload.single('gambar'), handleMulterError, paketSumbanganController.createPaketSumbangan);
 router.get("/", paketSumbanganController.getAllPaketSumbangan);
 router.get("/:id", paketSumbanganController.getPaketSumbanganById);
-router.put("/:id", upload.single('gambar'), paketSumbanganController.updatePaketSumbangan);
+router.put("/:id", upload.single('gambar'), handleMulterError, paketSumbanganController.updatePaketSumbangan);
 router.delete("/:id", paketSumbanganController.deletePaketSumbangan);
 
 router.post("/payment", paketSumbanganController.createPayment);
