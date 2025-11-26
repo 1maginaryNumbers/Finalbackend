@@ -6,15 +6,18 @@ const QRCode = require("qrcode");
 
 exports.createSumbangan = async (req, res) => {
   try {
-    const { namaEvent, deskripsi, targetDana, tanggalSelesai } = req.body;
+    // Check if sumbangan already exists, if so return it
+    let sumbangan = await Sumbangan.findOne();
     
-    if (!namaEvent || !targetDana) {
-      return res.status(400).json({ message: "Nama event and target dana are required" });
+    if (sumbangan) {
+      return res.json({
+        message: "Sumbangan already exists",
+        sumbangan
+      });
     }
     
     let qrisImage = '';
     let qrisString = '';
-    let generatedQR = null;
     
     if (req.file && req.file.buffer) {
       const imageBuffer = req.file.buffer;
@@ -22,30 +25,25 @@ exports.createSumbangan = async (req, res) => {
       const mimetype = req.file.mimetype || 'image/jpeg';
       qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else {
-      console.log('Generating static QRIS for donation event...');
-      const expirationDate = tanggalSelesai ? new Date(tanggalSelesai) : null;
-      const orderId = `STATIC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const amount = parseFloat(targetDana);
+      // Generate reusable QRIS for voluntary donation (no expiration, reusable)
+      console.log('Generating reusable QRIS for voluntary donation...');
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000; // Default amount, can be changed by user
       
-      generatedQR = await generateQRCode(orderId, amount, namaEvent, expirationDate, false);
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
       
       if (generatedQR) {
         qrisImage = generatedQR.image;
         qrisString = generatedQR.string;
-        console.log('Static QRIS generated and stored successfully');
+        console.log('Reusable QRIS generated and stored successfully');
       } else {
         console.log('Failed to generate QRIS, will be generated on request');
       }
     }
     
-    const sumbangan = new Sumbangan({
-      namaEvent,
-      deskripsi,
+    sumbangan = new Sumbangan({
       qrisImage,
-      qrisString,
-      qrisExpirationDate: tanggalSelesai ? new Date(tanggalSelesai) : null,
-      targetDana,
-      tanggalSelesai
+      qrisString
     });
     
     await sumbangan.save();
@@ -54,12 +52,9 @@ exports.createSumbangan = async (req, res) => {
       actionType: 'CREATE',
       entityType: 'SUMBANGAN',
       entityId: sumbangan._id,
-      entityName: sumbangan.namaEvent,
-      description: `Created new donation event: ${sumbangan.namaEvent}`,
-      details: { 
-        namaEvent: sumbangan.namaEvent, 
-        targetDana: sumbangan.targetDana
-      }
+      entityName: 'Donasi Sukarela',
+      description: `Created voluntary donation configuration`,
+      details: {}
     });
     
     res.status(201).json({
@@ -77,46 +72,36 @@ exports.createSumbangan = async (req, res) => {
 
 exports.getAllSumbangan = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    // For voluntary donation, only return one active sumbangan
+    // Create if doesn't exist
+    let sumbangan = await Sumbangan.findOne();
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const allSumbangan = await Sumbangan.find()
-      .sort({ tanggalMulai: -1 });
-    
-    const updatedSumbangan = await Promise.all(
-      allSumbangan.map(async (item) => {
-        if (item.tanggalSelesai && item.status === 'aktif') {
-          const endDate = new Date(item.tanggalSelesai);
-          endDate.setHours(0, 0, 0, 0);
-          
-          if (endDate < today) {
-            item.status = 'selesai';
-            await item.save();
-          }
-        }
-        return item;
-      })
-    );
-    
-    const totalSumbangan = updatedSumbangan.length;
-    const totalPages = Math.ceil(totalSumbangan / limit);
-    const paginatedSumbangan = updatedSumbangan.slice(skip, skip + limit);
-    
-    res.json({
-      sumbangan: paginatedSumbangan,
-      pagination: {
-        currentPage: page,
-        totalPages: totalPages,
-        totalSumbangan: totalSumbangan,
-        sumbanganPerPage: limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
+    if (!sumbangan) {
+      // Create default sumbangan with QRIS
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
+      
+      sumbangan = new Sumbangan({
+        qrisImage: generatedQR ? generatedQR.image : '',
+        qrisString: generatedQR ? generatedQR.string : ''
+      });
+      
+      await sumbangan.save();
+    } else if (!sumbangan.qrisImage && !sumbangan.qrisString) {
+      // Generate QRIS if doesn't exist
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
+      
+      if (generatedQR) {
+        sumbangan.qrisImage = generatedQR.image;
+        sumbangan.qrisString = generatedQR.string;
+        await sumbangan.save();
       }
-    });
+    }
+    
+    res.json([sumbangan]);
   } catch (err) {
     res.status(500).json({
       message: "Error fetching sumbangan",
@@ -144,21 +129,21 @@ exports.getSumbanganById = async (req, res) => {
 
 exports.getQRISImage = async (req, res) => {
   try {
-    const sumbangan = await Sumbangan.findById(req.params.id);
+    // Get the only sumbangan (voluntary donation)
+    let sumbangan = await Sumbangan.findOne();
     
     if (!sumbangan) {
-      return res.status(404).json({ message: "Sumbangan not found" });
-    }
-    
-    if (sumbangan.status !== 'aktif') {
-      return res.status(400).json({ message: "Donation event is not active" });
-    }
-    
-    if (sumbangan.qrisExpirationDate && new Date(sumbangan.qrisExpirationDate) < new Date()) {
-      return res.status(410).json({ 
-        message: "QRIS has expired",
-        expiredDate: sumbangan.qrisExpirationDate
+      // Create default sumbangan with QRIS
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
+      
+      sumbangan = new Sumbangan({
+        qrisImage: generatedQR ? generatedQR.image : '',
+        qrisString: generatedQR ? generatedQR.string : ''
       });
+      
+      await sumbangan.save();
     }
 
     if (sumbangan.qrisImage) {
@@ -174,11 +159,10 @@ exports.getQRISImage = async (req, res) => {
       return;
     }
 
-    const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
-    const orderId = `STATIC-${sumbangan._id}-${Date.now()}`;
-    const amount = sumbangan.targetDana;
-    
-    const generatedQR = await generateQRCode(orderId, amount, sumbangan.namaEvent, expirationDate, false);
+    // Generate QRIS if doesn't exist
+    const orderId = `DONASI-SUKARELA-${Date.now()}`;
+    const amount = 100000;
+    const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
     
     if (generatedQR) {
       sumbangan.qrisImage = generatedQR.image;
@@ -207,30 +191,41 @@ exports.getQRISImage = async (req, res) => {
 
 exports.getQRISString = async (req, res) => {
   try {
-    const sumbangan = await Sumbangan.findById(req.params.id);
+    // Get the only sumbangan (voluntary donation)
+    let sumbangan = await Sumbangan.findOne();
     
     if (!sumbangan) {
-      return res.status(404).json({ message: "Sumbangan not found" });
+      // Create default sumbangan with QRIS
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
+      
+      sumbangan = new Sumbangan({
+        qrisImage: generatedQR ? generatedQR.image : '',
+        qrisString: generatedQR ? generatedQR.string : ''
+      });
+      
+      await sumbangan.save();
     }
     
     if (!sumbangan.qrisString) {
-      return res.status(404).json({ message: "QRIS string not found" });
-    }
-
-    if (sumbangan.qrisExpirationDate && new Date(sumbangan.qrisExpirationDate) < new Date()) {
-      return res.status(410).json({ 
-        message: "QRIS has expired",
-        expiredDate: sumbangan.qrisExpirationDate
-      });
+      // Generate QRIS if doesn't exist
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
+      
+      if (generatedQR) {
+        sumbangan.qrisImage = generatedQR.image;
+        sumbangan.qrisString = generatedQR.string;
+        await sumbangan.save();
+      } else {
+        return res.status(404).json({ message: "QRIS string not found" });
+      }
     }
     
     res.json({
       qrisString: sumbangan.qrisString,
-      orderId: sumbangan._id.toString(),
-      eventName: sumbangan.namaEvent,
-      targetAmount: sumbangan.targetDana,
-      expirationDate: sumbangan.qrisExpirationDate,
-      isExpired: sumbangan.qrisExpirationDate ? new Date(sumbangan.qrisExpirationDate) < new Date() : false
+      orderId: sumbangan._id.toString()
     });
   } catch (err) {
     res.status(500).json({
@@ -242,7 +237,7 @@ exports.getQRISString = async (req, res) => {
 
 exports.updateSumbangan = async (req, res) => {
   try {
-    const { namaEvent, deskripsi, targetDana, danaTerkumpul, status, tanggalSelesai, regenerateQR } = req.body;
+    const { regenerateQR } = req.body;
     
     const sumbangan = await Sumbangan.findById(req.params.id);
     
@@ -250,49 +245,45 @@ exports.updateSumbangan = async (req, res) => {
       return res.status(404).json({ message: "Sumbangan not found" });
     }
     
-    if (namaEvent) sumbangan.namaEvent = namaEvent;
-    if (deskripsi !== undefined) sumbangan.deskripsi = deskripsi;
-    if (targetDana) sumbangan.targetDana = targetDana;
-    if (danaTerkumpul !== undefined) sumbangan.danaTerkumpul = danaTerkumpul;
-    if (status) sumbangan.status = status;
-    if (tanggalSelesai) sumbangan.tanggalSelesai = tanggalSelesai;
-    
     if (req.file && req.file.buffer) {
       const imageBuffer = req.file.buffer;
       const imageBase64 = imageBuffer.toString('base64');
       const mimetype = req.file.mimetype || 'image/jpeg';
       sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
     } else if (regenerateQR === 'true' || regenerateQR === true) {
-      console.log('Regenerating QRIS for donation event:', sumbangan._id);
-      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate, true);
+      console.log('Regenerating QRIS for voluntary donation:', sumbangan._id);
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
-        sumbangan.qrisExpirationDate = expirationDate;
         console.log('QRIS regenerated successfully');
       } else {
         console.warn('QRIS regeneration failed');
       }
     } else if (!sumbangan.qrisImage && !req.file) {
       console.log('No QRIS image exists, generating automatically during update...');
-      const orderId = `QRIS-TEMPLATE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const expirationDate = sumbangan.tanggalSelesai || tanggalSelesai ? new Date(sumbangan.tanggalSelesai || tanggalSelesai) : null;
-      const generatedQR = await generateQRCode(orderId, parseFloat(sumbangan.targetDana || targetDana), sumbangan.namaEvent || namaEvent, expirationDate, true);
+      const orderId = `DONASI-SUKARELA-${Date.now()}`;
+      const amount = 100000;
+      const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
-        sumbangan.qrisExpirationDate = expirationDate;
         console.log('QRIS generated during update');
       }
     }
-
-    if (tanggalSelesai && (!sumbangan.qrisExpirationDate || regenerateQR === 'true' || regenerateQR === true)) {
-      sumbangan.qrisExpirationDate = new Date(tanggalSelesai);
-    }
     
     await sumbangan.save();
+    
+    await logActivity(req, {
+      actionType: 'UPDATE',
+      entityType: 'SUMBANGAN',
+      entityId: sumbangan._id,
+      entityName: 'Donasi Sukarela',
+      description: `Updated voluntary donation QRIS`,
+      details: {}
+    });
     
     res.json({
       message: "Sumbangan updated successfully",
@@ -483,7 +474,7 @@ const generateQRCode = async (orderId, amount, eventName, expirationDate, isReus
           id: orderId,
           price: amount,
           quantity: 1,
-          name: `Donasi - ${eventName}`
+          name: 'Donasi Sukarela'
         }
       ]
     };
@@ -558,9 +549,7 @@ exports.createPayment = async (req, res) => {
       return res.status(404).json({ message: "Sumbangan not found" });
     }
     
-    if (sumbanganExists.status !== 'aktif') {
-      return res.status(400).json({ message: "Donation event is not active" });
-    }
+    // Voluntary donation is always active
     
     const orderId = `DONATION-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -582,8 +571,8 @@ exports.createPayment = async (req, res) => {
       actionType: 'CREATE',
       entityType: 'TRANSAKSI',
       entityId: transaksi._id,
-      entityName: `${namaDonatur} - ${sumbanganExists.namaEvent}`,
-      description: `Created donation transaction: ${namaDonatur} donated ${nominal} to ${sumbanganExists.namaEvent}`,
+      entityName: `${namaDonatur} - Donasi Sukarela`,
+      description: `Created donation transaction: ${namaDonatur} donated ${nominal}`,
       details: { 
         namaDonatur,
         sumbangan: sumbanganExists.namaEvent,
@@ -724,28 +713,8 @@ exports.handleWebhook = async (req, res) => {
     }
     
     if (newStatus === 'berhasil' && oldStatus !== 'berhasil') {
-      const sumbangan = await Sumbangan.findById(transaksi.sumbangan);
-      if (sumbangan) {
-        sumbangan.danaTerkumpul = (sumbangan.danaTerkumpul || 0) + transaksi.nominal;
-        
-        if (sumbangan.status === 'aktif' && sumbangan.qrisImage && orderId.startsWith('STATIC-')) {
-          const expirationDate = sumbangan.qrisExpirationDate || sumbangan.tanggalSelesai;
-          if (!expirationDate || new Date(expirationDate) > new Date()) {
-            console.log('Regenerating QRIS after successful payment for reusable QRIS...');
-            const newOrderId = `STATIC-${sumbangan._id}-${Date.now()}`;
-            const amount = sumbangan.targetDana;
-            
-            const newQR = await generateQRCode(newOrderId, amount, sumbangan.namaEvent, expirationDate, false);
-            if (newQR) {
-              sumbangan.qrisImage = newQR.image;
-              sumbangan.qrisString = newQR.string;
-              console.log('New QRIS generated and stored for next payment');
-            }
-          }
-        }
-        
-        await sumbangan.save();
-      }
+      // Voluntary donation QRIS is reusable, no need to regenerate
+      // Just log the successful transaction
     }
     
     res.status(200).json({ message: "Webhook processed successfully" });
