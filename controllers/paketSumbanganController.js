@@ -64,12 +64,27 @@ const formatCurrency = (amount) => {
 const formatDate = (date) => {
   if (!date) return '';
   const d = new Date(date);
-  const day = d.getDate().toString().padStart(2, '0');
-  const month = d.toLocaleDateString('id-ID', { month: 'long' });
-  const year = d.getFullYear();
-  const hours = d.getHours().toString().padStart(2, '0');
-  const minutes = d.getMinutes().toString().padStart(2, '0');
-  return `${day} ${month} ${year} pukul ${hours}.${minutes}`;
+  
+  // Convert to Indonesia timezone (WIB = UTC+7)
+  const dateOptions = {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  };
+  
+  const timeOptions = {
+    timeZone: 'Asia/Jakarta',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  };
+  
+  const dateStr = d.toLocaleDateString('id-ID', dateOptions);
+  const timeStr = d.toLocaleTimeString('id-ID', timeOptions);
+  
+  // Format: "26 November 2025 pukul 18.24"
+  return `${dateStr} pukul ${timeStr}`;
 };
 
 const sendReceiptEmail = async (transaksi, paket) => {
@@ -86,8 +101,21 @@ const sendReceiptEmail = async (transaksi, paket) => {
     }
 
     const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'noreply@vihara.com';
-    // Ensure we use the actual transaction date, refresh from DB if needed
-    const transaksiDate = transaksi.tanggalTransaksi || transaksi.createdAt || new Date();
+    
+    // Ensure we use the actual transaction date from database
+    // If transaksi is a Mongoose document, use its date fields
+    // Otherwise, refresh from DB
+    let transaksiDate;
+    if (transaksi.tanggalTransaksi) {
+      transaksiDate = transaksi.tanggalTransaksi;
+    } else if (transaksi.createdAt) {
+      transaksiDate = transaksi.createdAt;
+    } else {
+      // Refresh from database if needed
+      const freshTransaksi = await PaketSumbanganTransaksi.findById(transaksi._id);
+      transaksiDate = freshTransaksi?.tanggalTransaksi || freshTransaksi?.createdAt || new Date();
+    }
+    
     const orderDate = formatDate(transaksiDate);
     
     const detailBarangHtml = paket.detailBarang && paket.detailBarang.length > 0
