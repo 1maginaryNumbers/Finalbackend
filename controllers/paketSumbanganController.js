@@ -20,6 +20,15 @@ exports.createPaketSumbangan = async (req, res) => {
       return res.status(400).json({ message: "Nama paket and nominal are required" });
     }
     
+    let parsedDetailBarang = [];
+    if (detailBarang) {
+      try {
+        parsedDetailBarang = typeof detailBarang === 'string' ? JSON.parse(detailBarang) : detailBarang;
+      } catch (e) {
+        parsedDetailBarang = [];
+      }
+    }
+    
     let gambar = '';
     if (req.file && req.file.buffer) {
       const imageBuffer = req.file.buffer;
@@ -32,7 +41,7 @@ exports.createPaketSumbangan = async (req, res) => {
       namaPaket,
       deskripsi,
       nominal: parseFloat(nominal),
-      detailBarang: detailBarang || [],
+      detailBarang: parsedDetailBarang,
       status: status || 'nonaktif',
       tanggalMulai: tanggalMulai ? new Date(tanggalMulai) : null,
       tanggalSelesai: tanggalSelesai ? new Date(tanggalSelesai) : null,
@@ -123,7 +132,13 @@ exports.updatePaketSumbangan = async (req, res) => {
     if (namaPaket) paketSumbangan.namaPaket = namaPaket;
     if (deskripsi !== undefined) paketSumbangan.deskripsi = deskripsi;
     if (nominal) paketSumbangan.nominal = parseFloat(nominal);
-    if (detailBarang) paketSumbangan.detailBarang = detailBarang;
+    if (detailBarang !== undefined) {
+      try {
+        paketSumbangan.detailBarang = typeof detailBarang === 'string' ? JSON.parse(detailBarang) : detailBarang;
+      } catch (e) {
+        paketSumbangan.detailBarang = [];
+      }
+    }
     if (status) paketSumbangan.status = status;
     if (tanggalMulai !== undefined) paketSumbangan.tanggalMulai = tanggalMulai ? new Date(tanggalMulai) : null;
     if (tanggalSelesai !== undefined) paketSumbangan.tanggalSelesai = tanggalSelesai ? new Date(tanggalSelesai) : null;
