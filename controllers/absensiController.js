@@ -167,31 +167,93 @@ exports.createAbsensi = async (req, res) => {
 
 exports.getAllAbsensi = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
-    const skip = (page - 1) * limit;
+    const includeMissing = req.query.includeMissing === 'true';
     
-    const totalAbsensi = await Absensi.countDocuments();
-    const totalPages = Math.ceil(totalAbsensi / limit);
-    
-    const absensi = await Absensi.find()
-      .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
-      .populate('kegiatan', 'namaKegiatan')
-      .sort({ tanggal: -1 })
-      .skip(skip)
-      .limit(limit);
-    
-    res.json({
-      absensi,
-      pagination: {
-        currentPage: page,
-        totalPages: totalPages,
-        totalAbsensi: totalAbsensi,
-        absensiPerPage: limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      }
-    });
+    if (includeMissing) {
+      const allPendaftaran = await Pendaftaran.find()
+        .populate('kegiatan', 'namaKegiatan')
+        .sort({ tanggalDaftar: -1 });
+      
+      const allAbsensi = await Absensi.find()
+        .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
+        .populate('kegiatan', 'namaKegiatan')
+        .sort({ tanggal: -1 });
+      
+      const absensiMap = new Map();
+      allAbsensi.forEach(abs => {
+        const key = `${abs.pendaftaran._id}_${abs.kegiatan._id}`;
+        absensiMap.set(key, abs);
+      });
+      
+      const result = allPendaftaran.map(pendaftaran => {
+        const key = `${pendaftaran._id}_${pendaftaran.kegiatan._id}`;
+        const existingAbsensi = absensiMap.get(key);
+        
+        if (existingAbsensi) {
+          return {
+            ...existingAbsensi.toObject(),
+            pendaftaran: {
+              _id: pendaftaran._id,
+              namaLengkap: pendaftaran.namaLengkap,
+              email: pendaftaran.email,
+              namaKegiatan: pendaftaran.namaKegiatan,
+              tipePerson: pendaftaran.tipePerson
+            },
+            kegiatan: {
+              _id: pendaftaran.kegiatan._id,
+              namaKegiatan: pendaftaran.kegiatan.namaKegiatan
+            }
+          };
+        } else {
+          return {
+            _id: null,
+            pendaftaran: {
+              _id: pendaftaran._id,
+              namaLengkap: pendaftaran.namaLengkap,
+              email: pendaftaran.email,
+              namaKegiatan: pendaftaran.namaKegiatan,
+              tipePerson: pendaftaran.tipePerson
+            },
+            kegiatan: {
+              _id: pendaftaran.kegiatan._id,
+              namaKegiatan: pendaftaran.kegiatan.namaKegiatan
+            },
+            tanggal: pendaftaran.tanggalDaftar,
+            status: 'tidak_hadir',
+            tipePerson: pendaftaran.tipePerson,
+            isMissing: true
+          };
+        }
+      });
+      
+      return res.json(result);
+    } else {
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const skip = (page - 1) * limit;
+      
+      const totalAbsensi = await Absensi.countDocuments();
+      const totalPages = Math.ceil(totalAbsensi / limit);
+      
+      const absensi = await Absensi.find()
+        .populate('pendaftaran', 'namaLengkap email namaKegiatan tipePerson')
+        .populate('kegiatan', 'namaKegiatan')
+        .sort({ tanggal: -1 })
+        .skip(skip)
+        .limit(limit);
+      
+      res.json({
+        absensi,
+        pagination: {
+          currentPage: page,
+          totalPages: totalPages,
+          totalAbsensi: totalAbsensi,
+          absensiPerPage: limit,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      });
+    }
   } catch (err) {
     res.status(500).json({
       message: "Error fetching absensi",
