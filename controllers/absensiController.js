@@ -11,13 +11,30 @@ exports.scanQRCode = async (req, res) => {
       return res.status(400).json({ message: "QR Code data and kegiatan ID are required" });
     }
     
+    // Trim whitespace from QR code data
+    const trimmedQrCodeData = qrCodeData.trim();
+    
+    // Check if QR code data looks like a valid hex string (32 characters for our format)
+    if (trimmedQrCodeData.length !== 32 || !/^[0-9a-fA-F]+$/.test(trimmedQrCodeData)) {
+      console.log('Invalid QR code format:', trimmedQrCodeData);
+      return res.status(400).json({ 
+        message: "Format QR Code tidak valid. Pastikan Anda memindai QR Code absensi yang benar, bukan QR Code pembayaran." 
+      });
+    }
+    
     const pendaftaran = await Pendaftaran.findOne({ 
-      qrCodeData: qrCodeData,
+      $or: [
+        { qrCodeData: trimmedQrCodeData },
+        { qrCodeData: qrCodeData }
+      ],
       kegiatan: kegiatanId 
     }).populate('kegiatan');
     
     if (!pendaftaran) {
-      return res.status(404).json({ message: "Invalid QR Code or kegiatan not found" });
+      console.log('Pendaftaran not found for QR:', trimmedQrCodeData, 'kegiatan:', kegiatanId);
+      return res.status(404).json({ 
+        message: "QR Code tidak ditemukan atau tidak terdaftar untuk kegiatan ini. Pastikan QR Code yang dipindai adalah QR Code absensi yang benar." 
+      });
     }
     
     const today = new Date();
@@ -34,7 +51,7 @@ exports.scanQRCode = async (req, res) => {
     if (existingAbsensi) {
       if (existingAbsensi.status === 'hadir') {
         return res.status(409).json({ 
-          message: "Attendance already recorded for today",
+          message: "Absensi untuk hari ini sudah tercatat sebelumnya",
           absensi: existingAbsensi,
           pendaftaran: pendaftaran
         });
@@ -57,7 +74,7 @@ exports.scanQRCode = async (req, res) => {
         });
         
         return res.json({
-          message: "Attendance status updated successfully",
+          message: "Status absensi berhasil diperbarui",
           absensi: existingAbsensi,
           pendaftaran: pendaftaran
         });
@@ -69,7 +86,8 @@ exports.scanQRCode = async (req, res) => {
       kegiatan: kegiatanId,
       status: 'hadir',
       tipePerson: pendaftaran.tipePerson,
-      qrCode: qrCodeData
+      qrCode: trimmedQrCodeData,
+      tanggal: new Date()
     });
     
     await absensi.save();
@@ -82,20 +100,21 @@ exports.scanQRCode = async (req, res) => {
       description: `Created new absensi: ${pendaftaran.namaLengkap}`,
       details: { 
         namaLengkap: pendaftaran.namaLengkap, 
-        kegiatan: pendaftaran.kegiatan,
+        kegiatan: pendaftaran.kegiatan?.namaKegiatan || kegiatanId,
         status: absensi.status
       }
     });
     
     res.json({
-      message: "Attendance recorded successfully",
+      message: "Absensi berhasil dicatat",
       absensi: absensi,
       pendaftaran: pendaftaran
     });
   } catch (err) {
+    console.error('Error in scanQRCode:', err);
     res.status(500).json({
-      message: "Error recording attendance",
-      error: err.message
+      message: "Terjadi kesalahan saat mencatat absensi",
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
     });
   }
 };
