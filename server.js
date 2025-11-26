@@ -21,7 +21,7 @@ app.use((req, res, next) => {
   
   const origin = req.headers.origin;
   
-  if (req.path === '/api/sumbangan/webhook' || req.path === '/api/merchandise-transaksi/webhook') {
+  if (req.path === '/api/sumbangan/webhook' || req.path === '/api/merchandise-transaksi/webhook' || req.path === '/api/paket-sumbangan/webhook') {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -65,6 +65,7 @@ app.use("/api/pengumuman", require("./routes/pengumumanRoutes"));
 app.use("/api/kegiatan", require("./routes/kegiatanRoutes"));
 app.use("/api/pendaftaran", require("./routes/pendaftaranRoutes"));
 app.use("/api/sumbangan", require("./routes/sumbanganRoutes"));
+app.use("/api/paket-sumbangan", require("./routes/paketSumbanganRoutes"));
 app.use("/api/saran", require("./routes/saranRoutes"));
 app.use("/api/galeri", require("./routes/galeriRoutes"));
 app.use("/api/info-umum", require("./routes/infoUmumRoutes"));
