@@ -5,6 +5,98 @@ const midtransClient = require("midtrans-client");
 const QRCode = require("qrcode");
 const nodemailer = require("nodemailer");
 
+const cleanupSumbangan = async () => {
+  try {
+    const allSumbangan = await Sumbangan.find();
+    
+    if (allSumbangan.length <= 1) {
+      if (allSumbangan.length === 1) {
+        const sumbangan = allSumbangan[0];
+        const cleanedData = {
+          qrisImage: sumbangan.qrisImage || '',
+          qrisString: sumbangan.qrisString || '',
+          qrisUpdatedAt: sumbangan.qrisUpdatedAt || null
+        };
+        
+        const unsetFields = {};
+        const fieldsToRemove = ['bankName', 'bankNumber', 'qrisPaymentLink', 'namaEvent', 'deskripsi', 'targetDana', 'danaTerkumpul', 'status', 'tanggalMulai', 'tanggalSelesai', 'qrisExpirationDate'];
+        
+        for (const field of fieldsToRemove) {
+          if (sumbangan[field] !== undefined) {
+            unsetFields[field] = '';
+          }
+        }
+        
+        const updateData = { $set: cleanedData };
+        if (Object.keys(unsetFields).length > 0) {
+          updateData.$unset = unsetFields;
+        }
+        
+        await Sumbangan.findByIdAndUpdate(sumbangan._id, updateData, { new: true });
+      }
+      return;
+    }
+    
+    let keepSumbangan = allSumbangan[0];
+    
+    for (const sumbangan of allSumbangan) {
+      const hasQRIS = sumbangan.qrisImage || sumbangan.qrisString;
+      const keepHasQRIS = keepSumbangan.qrisImage || keepSumbangan.qrisString;
+      
+      if (hasQRIS && !keepHasQRIS) {
+        keepSumbangan = sumbangan;
+      } else if (hasQRIS && keepHasQRIS) {
+        const sumbanganDate = sumbangan.qrisUpdatedAt || sumbangan.updatedAt || sumbangan.createdAt;
+        const keepDate = keepSumbangan.qrisUpdatedAt || keepSumbangan.updatedAt || keepSumbangan.createdAt;
+        
+        if (sumbanganDate > keepDate) {
+          keepSumbangan = sumbangan;
+        }
+      } else if (!hasQRIS && !keepHasQRIS) {
+        const sumbanganDate = sumbangan.updatedAt || sumbangan.createdAt;
+        const keepDate = keepSumbangan.updatedAt || keepSumbangan.createdAt;
+        
+        if (sumbanganDate > keepDate) {
+          keepSumbangan = sumbangan;
+        }
+      }
+    }
+    
+    const cleanedData = {
+      qrisImage: keepSumbangan.qrisImage || '',
+      qrisString: keepSumbangan.qrisString || '',
+      qrisUpdatedAt: keepSumbangan.qrisUpdatedAt || null
+    };
+    
+    const unsetFields = {};
+    const fieldsToRemove = ['bankName', 'bankNumber', 'qrisPaymentLink', 'namaEvent', 'deskripsi', 'targetDana', 'danaTerkumpul', 'status', 'tanggalMulai', 'tanggalSelesai', 'qrisExpirationDate'];
+    
+    for (const field of fieldsToRemove) {
+      if (keepSumbangan[field] !== undefined) {
+        unsetFields[field] = '';
+      }
+    }
+    
+    const updateData = { $set: cleanedData };
+    if (Object.keys(unsetFields).length > 0) {
+      updateData.$unset = unsetFields;
+    }
+    
+    await Sumbangan.findByIdAndUpdate(keepSumbangan._id, updateData, { new: true });
+    
+    const idsToDelete = allSumbangan
+      .filter(s => s._id.toString() !== keepSumbangan._id.toString())
+      .map(s => s._id);
+    
+    if (idsToDelete.length > 0) {
+      await Sumbangan.deleteMany({ _id: { $in: idsToDelete } });
+      console.log(`Cleaned up ${idsToDelete.length} duplicate sumbangan documents`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up sumbangan:', error);
+  }
+};
+
 exports.createSumbangan = async (req, res) => {
   try {
     // Check if sumbangan already exists, if so return it
@@ -50,6 +142,9 @@ exports.createSumbangan = async (req, res) => {
     
     await sumbangan.save();
     
+    await cleanupSumbangan();
+    sumbangan = await Sumbangan.findOne();
+    
     await logActivity(req, {
       actionType: 'CREATE',
       entityType: 'SUMBANGAN',
@@ -74,12 +169,11 @@ exports.createSumbangan = async (req, res) => {
 
 exports.getAllSumbangan = async (req, res) => {
   try {
-    // For voluntary donation, only return one active sumbangan
-    // Create if doesn't exist
+    await cleanupSumbangan();
+    
     let sumbangan = await Sumbangan.findOne();
     
     if (!sumbangan) {
-      // Create default sumbangan with QRIS
       const orderId = `DONASI-SUKARELA-${Date.now()}`;
       const amount = 100000;
       const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
@@ -92,7 +186,6 @@ exports.getAllSumbangan = async (req, res) => {
       
       await sumbangan.save();
     } else if (!sumbangan.qrisImage && !sumbangan.qrisString) {
-      // Generate QRIS if doesn't exist
       const orderId = `DONASI-SUKARELA-${Date.now()}`;
       const amount = 100000;
       const generatedQR = await generateQRCode(orderId, amount, 'Donasi Sukarela', null, true);
@@ -286,6 +379,23 @@ exports.updateSumbangan = async (req, res) => {
     }
     
     await sumbangan.save();
+    
+    const unsetFields = {};
+    const fieldsToRemove = ['bankName', 'bankNumber', 'qrisPaymentLink', 'namaEvent', 'deskripsi', 'targetDana', 'danaTerkumpul', 'status', 'tanggalMulai', 'tanggalSelesai', 'qrisExpirationDate'];
+    
+    for (const field of fieldsToRemove) {
+      if (sumbangan[field] !== undefined) {
+        unsetFields[field] = '';
+      }
+    }
+    
+    if (Object.keys(unsetFields).length > 0) {
+      await Sumbangan.findByIdAndUpdate(sumbangan._id, { $unset: unsetFields });
+      sumbangan = await Sumbangan.findById(sumbangan._id);
+    }
+    
+    await cleanupSumbangan();
+    sumbangan = await Sumbangan.findOne();
     
     await logActivity(req, {
       actionType: 'UPDATE',
