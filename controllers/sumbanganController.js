@@ -790,7 +790,7 @@ Terima kasih atas dukungan Anda kepada Vihara BDC.
     `;
 
     const mailOptions = {
-      from: fromEmail,
+      from: `"Vihara BDC" <${fromEmail}>`,
       to: transaksi.email,
       subject: 'Bukti Donasi - Vihara Buddhayana Dharmawira Centre',
       html: htmlContent,
