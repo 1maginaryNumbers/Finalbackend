@@ -5,7 +5,6 @@ const paketSumbanganTransaksiSchema = new mongoose.Schema({
   namaPembeli: { type: String, required: true },
   email: { type: String },
   nomorTelepon: { type: String },
-  alamat: { type: String },
   nominal: { type: Number, required: true },
   status: { type: String, enum: ['pending', 'berhasil', 'gagal', 'settlement', 'capture', 'deny', 'cancel', 'expire', 'refund'], default: 'pending' },
   tanggalTransaksi: { type: Date, default: Date.now },

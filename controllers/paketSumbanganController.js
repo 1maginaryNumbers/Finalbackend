@@ -199,12 +199,15 @@ const sendReceiptEmail = async (transaksi, paket) => {
             </div>
             ` : ''}
             
-            ${transaksi.alamat ? `
-            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Alamat</h2>
-              <p style="margin: 10px 0; white-space: pre-wrap;">${transaksi.alamat}</p>
+            <div style="background-color: #e7f3ff; border-left: 4px solid #2196F3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #2196F3; padding-bottom: 10px; margin-bottom: 15px;">Informasi Pengambilan Paket</h2>
+              <p style="margin: 10px 0; color: #1565C0; font-size: 15px; line-height: 1.6;">
+                <strong>Paket harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran.</strong>
+              </p>
+              <p style="margin: 10px 0; color: #424242; font-size: 14px; line-height: 1.6;">
+                Setelah pembayaran berhasil, silakan datang ke Vihara BDC untuk mengambil paket sumbangan Anda. Pastikan membawa kuitansi pembayaran (email ini dapat digunakan sebagai bukti) dan identitas diri.
+              </p>
             </div>
-            ` : ''}
             
             <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
               <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Metode Pembayaran</h2>
@@ -231,7 +234,7 @@ const sendReceiptEmail = async (transaksi, paket) => {
             
             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
               <p style="margin: 0; color: #856404; font-size: 14px;">
-                <strong>Catatan:</strong> Terima kasih atas sumbangan Anda. Kami akan menghubungi Anda untuk konfirmasi lebih lanjut.
+                <strong>Catatan Penting:</strong> Paket sumbangan harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran. Email ini dapat digunakan sebagai bukti pembayaran.
               </p>
             </div>
             
@@ -265,13 +268,15 @@ ${paket.deskripsi ? `- Deskripsi: ${paket.deskripsi}\n` : ''}
 - Nominal: ${formatCurrency(transaksi.nominal || paket.nominal)}
 
 ${paket.detailBarang && paket.detailBarang.length > 0 ? `Isi Paket:\n${paket.detailBarang.map(barang => `- ${barang.namaBarang || barang.namaItem || 'Item'}: ${barang.jumlah} ${barang.keterangan ? `(${barang.keterangan})` : ''}`).join('\n')}\n` : ''}
-${transaksi.alamat ? `Alamat:\n${transaksi.alamat}\n` : ''}
+Informasi Pengambilan Paket:
+Paket harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran. Email ini dapat digunakan sebagai bukti pembayaran. Pastikan membawa identitas diri saat mengambil paket.
+
 Metode Pembayaran:
 - Metode: ${transaksi.paymentGateway === 'midtrans' ? 'Midtrans' : 'Transfer'}
 ${transaksi.midtransPaymentType ? `- Tipe Pembayaran: ${transaksi.midtransPaymentType}${transaksi.midtransBank ? ` (${transaksi.midtransBank})` : ''}\n` : ''}
 ${transaksi.midtransVaNumber ? `- Virtual Account: ${transaksi.midtransVaNumber}\n` : ''}
 
-Catatan: Terima kasih atas sumbangan Anda. Kami akan menghubungi Anda untuk konfirmasi lebih lanjut.
+Catatan Penting: Paket sumbangan harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran. Email ini dapat digunakan sebagai bukti pembayaran.
 
 Jika Anda memiliki pertanyaan, silakan hubungi kami melalui:
 Email: info@viharabdc.com | Telepon: (021) 1234-5678
@@ -500,7 +505,7 @@ exports.deletePaketSumbangan = async (req, res) => {
 
 exports.createPayment = async (req, res) => {
   try {
-    const { paketSumbangan, namaPembeli, email, nomorTelepon, alamat } = req.body;
+    const { paketSumbangan, namaPembeli, email, nomorTelepon } = req.body;
     
     if (!paketSumbangan || !namaPembeli) {
       return res.status(400).json({ message: "Paket sumbangan and nama pembeli are required" });
@@ -526,7 +531,6 @@ exports.createPayment = async (req, res) => {
       namaPembeli,
       email,
       nomorTelepon,
-      alamat,
       nominal: paket.nominal,
       status: 'pending',
       paymentGateway: 'midtrans',
