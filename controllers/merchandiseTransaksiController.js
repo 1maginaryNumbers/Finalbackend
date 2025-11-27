@@ -151,13 +151,6 @@ const sendReceiptEmail = async (transaksi, merchandise) => {
               </table>
             </div>
             
-            ${transaksi.alamatPengiriman ? `
-            <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
-              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Alamat Pengiriman</h2>
-              <p style="margin: 10px 0; white-space: pre-wrap;">${transaksi.alamatPengiriman}</p>
-            </div>
-            ` : ''}
-            
             <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
               <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Metode Pembayaran</h2>
               
@@ -183,7 +176,7 @@ const sendReceiptEmail = async (transaksi, merchandise) => {
             
             <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px;">
               <p style="margin: 0; color: #856404; font-size: 14px;">
-                <strong>Catatan:</strong> Pesanan Anda sedang diproses. Kami akan menghubungi Anda untuk konfirmasi pengiriman.
+                <strong>Catatan Penting:</strong> Barang harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran. Email ini dapat digunakan sebagai bukti pembayaran.
               </p>
             </div>
             
@@ -217,13 +210,12 @@ Detail Produk:
 - Jumlah: ${transaksi.jumlah} item
 - Total: ${formatCurrency(transaksi.totalHarga)}
 
-${transaksi.alamatPengiriman ? `Alamat Pengiriman:\n${transaksi.alamatPengiriman}\n` : ''}
 Metode Pembayaran:
 - Metode: ${transaksi.paymentGateway === 'midtrans' ? 'Midtrans' : transaksi.metodePembayaran || 'Transfer'}
 ${transaksi.midtransPaymentType ? `- Tipe Pembayaran: ${transaksi.midtransPaymentType}${transaksi.midtransBank ? ` (${transaksi.midtransBank})` : ''}\n` : ''}
 ${transaksi.midtransVaNumber ? `- Virtual Account: ${transaksi.midtransVaNumber}\n` : ''}
 
-Catatan: Pesanan Anda sedang diproses. Kami akan menghubungi Anda untuk konfirmasi pengiriman.
+Catatan Penting: Barang harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran. Email ini dapat digunakan sebagai bukti pembayaran.
 
 Jika Anda memiliki pertanyaan, silakan hubungi kami melalui:
 Email: info@viharabdc.com | Telepon: (021) 1234-5678
@@ -251,7 +243,7 @@ Terima kasih atas dukungan Anda kepada Vihara BDC.
 
 exports.createMerchandiseTransaksi = async (req, res) => {
   try {
-    const { merchandise, namaPembeli, email, nomorTelepon, jumlah, alamatPengiriman } = req.body;
+    const { merchandise, namaPembeli, email, nomorTelepon, jumlah } = req.body;
     
     if (!merchandise || !namaPembeli || !jumlah) {
       return res.status(400).json({ message: "Merchandise, nama pembeli, and jumlah are required" });
@@ -279,7 +271,6 @@ exports.createMerchandiseTransaksi = async (req, res) => {
       nomorTelepon,
       jumlah,
       totalHarga,
-      alamatPengiriman,
       metodePembayaran: 'midtrans',
       status: 'pending',
       paymentGateway: 'midtrans'

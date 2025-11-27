@@ -17,8 +17,7 @@ const merchandiseTransaksiSchema = new mongoose.Schema({
   midtransTransactionStatus: { type: String },
   midtransPaymentType: { type: String },
   midtransVaNumber: { type: String },
-  midtransBank: { type: String },
-  alamatPengiriman: { type: String }
+  midtransBank: { type: String }
 });
 
 module.exports = mongoose.model("MerchandiseTransaksi", merchandiseTransaksiSchema);
