@@ -199,7 +199,15 @@ const sendReceiptEmail = async (transaksi, paket) => {
             </div>
             ` : ''}
             
-            
+            <div style="background-color: #e7f3ff; border-left: 4px solid #2196F3; padding: 20px; margin: 20px 0; border-radius: 4px;">
+              <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #2196F3; padding-bottom: 10px; margin-bottom: 15px;">Informasi Pengambilan Paket</h2>
+              <p style="margin: 10px 0; color: #1565C0; font-size: 15px; line-height: 1.6;">
+                <strong>Paket harus diambil langsung di Vihara BDC dengan menunjukkan kuitansi pembayaran.</strong>
+              </p>
+              <p style="margin: 10px 0; color: #424242; font-size: 14px; line-height: 1.6;">
+                Setelah pembayaran berhasil, silakan datang ke Vihara BDC untuk mengambil paket sumbangan Anda. Pastikan membawa kuitansi pembayaran (email ini dapat digunakan sebagai bukti) dan identitas diri.
+              </p>
+            </div>
             
             <div style="background-color: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0;">
               <h2 style="color: #2c3e50; margin-top: 0; font-size: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px;">Metode Pembayaran</h2>
