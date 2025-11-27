@@ -5,7 +5,8 @@ const sumbanganSchema = new mongoose.Schema({
   bankNumber: { type: String },
   qrisImage: { type: String },
   qrisString: { type: String },
-  qrisPaymentLink: { type: String }
+  qrisPaymentLink: { type: String },
+  qrisUpdatedAt: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model("Sumbangan", sumbanganSchema);

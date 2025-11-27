@@ -44,7 +44,8 @@ exports.createSumbangan = async (req, res) => {
     
     sumbangan = new Sumbangan({
       qrisImage,
-      qrisString
+      qrisString,
+      qrisUpdatedAt: (qrisImage || qrisString) ? new Date() : null
     });
     
     await sumbangan.save();
@@ -85,7 +86,8 @@ exports.getAllSumbangan = async (req, res) => {
       
       sumbangan = new Sumbangan({
         qrisImage: generatedQR ? generatedQR.image : '',
-        qrisString: generatedQR ? generatedQR.string : ''
+        qrisString: generatedQR ? generatedQR.string : '',
+        qrisUpdatedAt: generatedQR ? new Date() : null
       });
       
       await sumbangan.save();
@@ -98,6 +100,7 @@ exports.getAllSumbangan = async (req, res) => {
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisUpdatedAt = new Date();
         await sumbangan.save();
       }
     }
@@ -141,7 +144,8 @@ exports.getQRISImage = async (req, res) => {
       
       sumbangan = new Sumbangan({
         qrisImage: generatedQR ? generatedQR.image : '',
-        qrisString: generatedQR ? generatedQR.string : ''
+        qrisString: generatedQR ? generatedQR.string : '',
+        qrisUpdatedAt: generatedQR ? new Date() : null
       });
       
       await sumbangan.save();
@@ -168,6 +172,7 @@ exports.getQRISImage = async (req, res) => {
     if (generatedQR) {
       sumbangan.qrisImage = generatedQR.image;
       sumbangan.qrisString = generatedQR.string;
+      sumbangan.qrisUpdatedAt = new Date();
       await sumbangan.save();
       
       const base64Data = generatedQR.image.split(',')[1];
@@ -203,7 +208,8 @@ exports.getQRISString = async (req, res) => {
       
       sumbangan = new Sumbangan({
         qrisImage: generatedQR ? generatedQR.image : '',
-        qrisString: generatedQR ? generatedQR.string : ''
+        qrisString: generatedQR ? generatedQR.string : '',
+        qrisUpdatedAt: generatedQR ? new Date() : null
       });
       
       await sumbangan.save();
@@ -218,6 +224,7 @@ exports.getQRISString = async (req, res) => {
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisUpdatedAt = new Date();
         await sumbangan.save();
       } else {
         return res.status(404).json({ message: "QRIS string not found" });
@@ -251,6 +258,7 @@ exports.updateSumbangan = async (req, res) => {
       const imageBase64 = imageBuffer.toString('base64');
       const mimetype = req.file.mimetype || 'image/jpeg';
       sumbangan.qrisImage = `data:${mimetype};base64,${imageBase64}`;
+      sumbangan.qrisUpdatedAt = new Date();
     } else if (regenerateQR === 'true' || regenerateQR === true) {
       console.log('Regenerating QRIS for voluntary donation:', sumbangan._id);
       const orderId = `DONASI-SUKARELA-${Date.now()}`;
@@ -259,6 +267,7 @@ exports.updateSumbangan = async (req, res) => {
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisUpdatedAt = new Date();
         console.log('QRIS regenerated successfully');
       } else {
         console.warn('QRIS regeneration failed');
@@ -271,6 +280,7 @@ exports.updateSumbangan = async (req, res) => {
       if (generatedQR) {
         sumbangan.qrisImage = generatedQR.image;
         sumbangan.qrisString = generatedQR.string;
+        sumbangan.qrisUpdatedAt = new Date();
         console.log('QRIS generated during update');
       }
     }
